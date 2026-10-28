@@ -364,6 +364,7 @@ function renderAdd() {
         ${src[i] ? `<div class="src"><p lang="${L}">${markNew(src[i], vocab, b.lang)}</p></div>` : ""}
         ${vi[i] ? `<p>${markVi(vi[i], vt)}</p>` : ""}`).join("")}
       ${r.note ? `<p class="note">${esc(r.note)}</p>` : ""}
+      ${!(r.vocab || []).length && !state.busy ? `<p><button class="primary" id="retryAnalyze">Tạo từ vựng và mẫu câu</button></p>` : ""}
       <h3>Từ vựng (${(r.vocab || []).length})</h3>${(r.vocab || []).map(v => { const k = b.id + "|tu-vung|" + v.w; return `<div><span class="${known.has(k) ? "" : "nw"}" role="button" tabindex="0" data-vk="${esc(k)}" lang="${L}"><b>${esc(v.w)}</b></span> <span class="ipa">${esc(v.ipa)}</span> — ${esc(v.mean)}</div>`; }).join("")}
       <h3>Mẫu câu (${(r.patterns || []).length})</h3>${(r.patterns || []).map(x => `<div style="margin-bottom:8px"><b>${esc(x.name)}</b>: <span class="formula">${esc(x.formula)}</span><div class="quote" lang="${L}">${esc(x.src)}</div><div class="help">${esc(x.explain)}</div></div>`).join("")}
       ${(r.hard || []).length ? `<details class="hard"><summary>Phân tích câu khó (${r.hard.length})</summary><ul>${r.hard.map(h => `<li><div class="quote" lang="${L}">${esc(h.s)}</div><div>${esc(h.parts)}</div><div class="pg">${esc(h.mean)}</div></li>`).join("")}</ul></details>` : ""}
@@ -372,21 +373,54 @@ function renderAdd() {
 }
 
 function buildPrompt(b, lang, next, prevText, hasImage) {
-  return `Bạn là gia sư ngôn ngữ cho người Việt. Người học có trình độ tiếng Anh IELTS 6.0 (~B2) và tiếng Trung HSK 4.
+  return `Bạn là dịch giả cho người Việt đang học ngoại ngữ.
 Họ đang đọc cuốn "${b.title}"${b.original ? ` (${b.original})` : ""}. Đây là trang thứ ${next} họ dịch.
 ${prevText ? `Đoạn dịch tiếng Việt của trang trước (để giữ mạch văn và cách xưng hô):\n"""${prevText}"""\n` : ""}
 ${hasImage ? "Trang sách nằm trong ảnh đính kèm: chép lại nguyên văn chữ trong ảnh (bỏ số chú thích, dòng trạng thái của máy đọc sách)." : ""}
 ${state.draft.trim() ? `Nội dung trang:\n"""${state.draft.trim()}"""` : ""}
 
-Trả về DUY NHẤT một đối tượng JSON:
+Trả về DUY NHẤT một đối tượng JSON, không thêm chữ nào khác:
 {"lang":"en" hoặc "zh",
  "source":["đoạn gốc 1","đoạn gốc 2"],
  "translation":["bản dịch tiếng Việt tự nhiên, sát nghĩa, mỗi phần tử ứng với một đoạn gốc"],
- "note":"ghi chú ngắn về tên riêng, thuật ngữ, bối cảnh (chuỗi rỗng nếu không cần)",
- "vocab":[{"w":"từ","ipa":"IPA với tiếng Anh; pinyin với tiếng Trung","pos":"từ loại (với tiếng Trung thêm âm Hán Việt và cấp HSK, ví dụ: 'động từ · Hán Việt: ... · HSK5')","mean":"nghĩa tiếng Việt trong ngữ cảnh","vi":"cụm từ tiếng Việt dịch từ này, chép ĐÚNG Y NGUYÊN như nó xuất hiện trong translation (để tô màu)","ex":"câu ví dụ ngắn mới"}],
- "patterns":[{"name":"tên cấu trúc bằng tiếng Việt","formula":"công thức","src":"câu gốc trong trang","explain":"giải thích bằng tiếng Việt","ex":"ví dụ mới","exVi":"bản dịch tiếng Việt của ví dụ"}],
+ "note":"ghi chú ngắn về tên riêng, thuật ngữ (chuỗi rỗng nếu không cần)"}
+Nếu trang bị cắt giữa câu ở đầu/cuối, giữ nguyên dấu "..." trong cả bản gốc và bản dịch.`;
+}
+
+// Bước 2: phân tích từ vựng, mẫu câu, câu khó từ chữ đã có (không gửi lại ảnh) để câu trả lời ngắn và ổn định.
+function buildAnalysisPrompt(page) {
+  return `Bạn là gia sư ngôn ngữ cho người Việt. Người học có trình độ tiếng Anh IELTS 6.0 (~B2) và tiếng Trung HSK 4.
+Sách "${page.bookTitle}". Ngôn ngữ gốc: ${page.lang === "zh" ? "tiếng Trung" : "tiếng Anh"}.
+Bản gốc:
+"""${page.source.join("\n")}"""
+Bản dịch tiếng Việt:
+"""${page.translation.join("\n")}"""
+
+Trả về DUY NHẤT một đối tượng JSON, không thêm chữ nào khác:
+{"vocab":[{"w":"từ","ipa":"IPA với tiếng Anh; pinyin với tiếng Trung","pos":"từ loại (với tiếng Trung thêm âm Hán Việt và cấp HSK)","mean":"nghĩa tiếng Việt trong ngữ cảnh","vi":"cụm từ tiếng Việt dịch từ này, chép ĐÚNG Y NGUYÊN như nó xuất hiện trong bản dịch (để tô màu)","ex":"câu ví dụ ngắn mới"}],
+ "patterns":[{"name":"tên cấu trúc bằng tiếng Việt","formula":"công thức","src":"câu gốc trong trang","explain":"giải thích ngắn bằng tiếng Việt","ex":"ví dụ mới","exVi":"bản dịch tiếng Việt của ví dụ"}],
  "hard":[{"s":"câu khó trong trang","parts":"tách thành phần: chủ ngữ, vị ngữ, mệnh đề (tiếng Việt)","mean":"ý nghĩa"}]}
-Quy tắc: vocab 8–15 mục, CHỈ từ vượt trình độ trên (tiếng Anh: trên B2, thành ngữ, cụm động từ, từ học thuật; tiếng Trung: HSK5 trở lên, 成语, 书面语). patterns 2–5 mục. hard 1–3 câu. Nếu trang bị cắt giữa câu ở đầu/cuối, giữ nguyên dấu "..." trong cả bản gốc và bản dịch. Mọi giải thích bằng tiếng Việt.`;
+Quy tắc: vocab 8–12 mục, CHỈ từ vượt trình độ trên (tiếng Anh: trên B2, thành ngữ, cụm động từ, từ học thuật; tiếng Trung: HSK5 trở lên, 成语, 书面语). patterns 2–4 mục. hard 1–2 câu. Giữ mỗi trường ngắn gọn.`;
+}
+
+const ERR_VI = { cancelled: "Đã dừng.", not_granted: "Bạn chưa cho phép trang dùng Claude. Tải lại trang và chọn Cho phép.",
+  rate_limited: "Claude đang bận, đợi một lúc rồi thử lại.", invalid_json: "Claude trả lời sai định dạng.",
+  prompt_too_large: "Trang quá dài. Hãy chia làm hai lần dán.", image_rejected: "Ảnh không đọc được. Hãy thử ảnh khác hoặc dán chữ." };
+const errVi = e => ERR_VI[e && e.code] || `Không thực hiện được (${(e && (e.code || e.message)) || "lỗi"}). Thử lại sau.`;
+
+async function analyze(page) {
+  if (!sample || !db || state.busy || !page) return;
+  state.busy = true; state.err = false; state.msg = "Claude đang tạo từ vựng và mẫu câu…"; state.ctl = new AbortController(); render();
+  try {
+    const out = await sample.json(buildAnalysisPrompt(page), { signal: state.ctl.signal, modelTier: "default" });
+    const fields = { vocab: (out.vocab || []).filter(v => v && v.w), patterns: (out.patterns || []).filter(x => x && x.name), hard: (out.hard || []).filter(h => h && h.s) };
+    await db.collection("pages").doc(`${page.book}-${pad(page.n)}`).update(fields);
+    Object.assign(page, fields);
+    state.msg = "";
+  } catch (e) {
+    state.err = true;
+    state.msg = `Đã lưu bản dịch. Phần từ vựng và mẫu câu chưa tạo được: ${errVi(e)} Bấm "Tạo từ vựng và mẫu câu" để thử lại.`;
+  } finally { state.busy = false; render(); }
 }
 
 async function translate() {
@@ -410,16 +444,14 @@ async function translate() {
     const page = { book: b.id, bookTitle: b.title, bookOriginal: b.original || "", lang: out.lang === "zh" ? "zh" : "en", n: next,
       label: state.pageLabel.trim(), date: new Date().toISOString().slice(0, 10),
       source: (out.source || []).map(String), translation: out.translation.map(String), note: String(out.note || ""),
-      vocab: (out.vocab || []).filter(v => v && v.w), patterns: (out.patterns || []).filter(x => x && x.name), hard: (out.hard || []).filter(h => h && h.s) };
+      vocab: [], patterns: [], hard: [] };
     await db.collection("pages").doc(`${b.id}-${pad(next)}`).set(page);
     state.result = page; state.draft = ""; store.set("draft", ""); state.file = null; state.pageLabel = "";
     state.book = b.id; store.set("book", b.id); state.msg = ""; state.newTitle = "";
+    state.busy = false; render();
+    return analyze(page);
   } catch (e) {
-    state.err = true;
-    state.msg = { cancelled: "Đã dừng.", not_granted: "Bạn chưa cho phép trang dùng Claude. Tải lại trang và chọn Cho phép.",
-      rate_limited: "Claude đang bận, đợi một lúc rồi thử lại.", invalid_json: "Claude trả lời sai định dạng. Bấm dịch lại.",
-      prompt_too_large: "Trang quá dài. Hãy chia làm hai lần dán.", image_rejected: "Ảnh không đọc được. Hãy thử ảnh khác hoặc dán chữ." }[e && e.code]
-      || `Không dịch được (${(e && (e.code || e.message)) || "lỗi"}). Thử lại sau.`;
+    state.err = true; state.msg = errVi(e) + (e && e.code === "invalid_json" ? " Bấm dịch lại." : "");
   } finally { state.busy = false; render(); }
 }
 
@@ -543,6 +575,7 @@ document.addEventListener("click", e => {
   const b = e.target.closest("button, #card, [data-vk]"); if (!b) return;
   const t = tab();
   if (b.id === "go") return translate();
+  if (b.id === "retryAnalyze") { const bk = book(); return analyze(state.result || (bk && bk.pages[bk.pages.length - 1])); }
   if (b.id === "fsUp" || b.id === "fsDown") { rs = Math.round(Math.max(0.8, Math.min(1.8, rs + (b.id === "fsUp" ? 0.1 : -0.1))) * 10) / 10; store.set("rs", rs); return applyRs(); }
   if (b.id === "openReader") return openReader();
   if (b.id === "pasteBtn") return pasteFromClipboard();

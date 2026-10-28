@@ -102,6 +102,22 @@ input[type="search"] { font: inherit; font-size: .88rem; padding: 6px 10px; bord
 .sheet .ex { font-family: var(--font-read); font-style: italic; color: var(--muted); }
 .sheet .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 
+/* Đọc kiểu Kindle: trang cố định, lật trái/phải bằng cột CSS */
+#reader { position: fixed; inset: 0; z-index: 30; background: var(--surface); color: var(--ink); display: grid; grid-template-rows: auto 1fr auto;
+  padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.rd-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 10px max(16px, env(safe-area-inset-right, 0px)) 6px max(16px, env(safe-area-inset-left, 0px)); border-bottom: 1px solid var(--line); }
+.rd-bar .seg button { padding: 5px 10px; }
+.rd-view { position: relative; overflow: hidden; margin: 18px max(24px, env(safe-area-inset-right, 0px)) 8px max(24px, env(safe-area-inset-left, 0px)); max-width: 680px; width: calc(100% - 48px); justify-self: center; touch-action: pan-y; }
+.rd-content { position: absolute; top: 0; left: 0; height: 100%; column-fill: auto; font-family: var(--font-read); line-height: 1.7; text-align: justify; }
+@media (prefers-reduced-motion: no-preference) { .rd-content.anim { transition: transform .25s ease; } }
+.rd-content p { margin: 0 0 .8em; text-indent: 1.2em; }
+@media (max-width: 520px) { .rd-content { text-align: left; } }
+.rd-content .rd-mark { font-family: var(--font-ui); font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-indent: 0; margin: .6em 0 .4em; }
+.rd-content .rd-src { color: var(--muted); font-size: .92em; }
+.rd-foot { display: flex; justify-content: space-between; padding: 4px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px)); font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+#rdSheet .sheet { z-index: 40; }
+#reader[hidden] { display: none; }
+
 /* Thêm trang */
 .add { display: grid; gap: 14px; }
 .add .field { display: grid; gap: 6px; }
@@ -131,6 +147,14 @@ details.hard li { margin-bottom: 8px; }
   </div>
 </header>
 <main><div class="wrap" id="view"></div></main>
+<div id="reader" hidden>
+  <div class="rd-bar"><button id="closeReader">Đóng</button>
+    <span class="seg" role="group" aria-label="Ngôn ngữ đọc"><button data-rdlang="vi">Tiếng Việt</button><button data-rdlang="src">Bản gốc</button><button data-rdlang="both">Song ngữ</button></span>
+    <span class="seg" role="group" aria-label="Cỡ chữ"><button data-rdsize="-1" aria-label="Chữ nhỏ hơn">A−</button><button data-rdsize="1" aria-label="Chữ to hơn">A+</button></span></div>
+  <div class="rd-view" id="rdView"><div class="rd-content" id="rdContent"></div></div>
+  <div class="rd-foot"><span id="rdWhere"></span><span id="rdPct"></span></div>
+  <div id="rdSheet"></div>
+</div>
 
 <script>
 const REPO_BOOKS = /*__DATA__*/[];
@@ -139,7 +163,7 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 };
-const state = { draft: store.get("draft", ""), pageLabel: "", file: null, busy: false, msg: "", err: false, result: null, newTitle: "", confirmDel: null, book: store.get("book", REPO_BOOKS[0] && REPO_BOOKS[0].id), mode: { "tu-vung": "list", "mau-cau": "list" }, filter: "all", q: "", deck: null, idx: 0, flipped: false, autoGo: store.get("autoGo", true), pasteHint: false, view: store.get("view", "both"), pop: null };
+const state = { draft: store.get("draft", ""), pageLabel: "", file: null, busy: false, msg: "", err: false, result: null, newTitle: "", confirmDel: null, book: store.get("book", REPO_BOOKS[0] && REPO_BOOKS[0].id), mode: { "tu-vung": "list", "mau-cau": "list" }, filter: "all", q: "", deck: null, idx: 0, flipped: false, rdOpen: false, rdLang: store.get("rdLang", "vi"), rdSize: store.get("rdSize", 19), rdPage: 0, rdPages: 1, autoGo: store.get("autoGo", true), pasteHint: false, view: store.get("view", "both"), pop: null };
 const known = new Set(store.get("known", []));
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const pad = n => String(n).padStart(3, "0");
@@ -201,11 +225,29 @@ function wordRegex(w, lang) {
   return new RegExp("\\b" + parts.join("\\s+") + "\\b", "gi");
 }
 function markNew(text, vocab, lang) {
-  const hits = [];
-  for (const v of vocab) {
-    if (known.has(v.key)) continue;
-    for (const m of text.matchAll(wordRegex(v.w, lang))) hits.push({ a: m.index, z: m.index + m[0].length, key: v.key });
+  return markTerms(text, vocab.filter(v => !known.has(v.key)).map(v => ({ key: v.key, re: wordRegex(v.w, lang) })));
+}
+// Cụm tiếng Việt ứng với từ mới: dùng trường "vi" (cụm đúng như trong bản dịch); trang cũ không có thì thử các nghĩa trong "mean".
+// Chỉ dùng từ vựng của chính trang đó: cùng một cụm tiếng Việt ở trang khác chưa chắc dịch từ cùng một từ tiếng Anh.
+function viTerms(p) {
+  const b = book(), out = [], seen = new Set();
+  if (!b || !p) return out;
+  for (const v of p.vocab || []) {
+    const key = b.id + "|tu-vung|" + v.w;
+    if (known.has(key)) continue;
+    const phrases = v.vi ? [v.vi] : String(v.mean || "").split(/[,;()=\/…]|\.\.\.|\bhoặc\b/).map(x => x.trim()).filter(x => x.length >= 3);
+    for (const ph of phrases) {
+      const id = key + "|" + ph.toLowerCase();
+      if (seen.has(id)) continue; seen.add(id);
+      out.push({ key, re: new RegExp("(?<![\\p{L}\\p{M}])" + ph.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![\\p{L}\\p{M}])", "giu") });
+    }
   }
+  return out;
+}
+function markVi(text, terms) { return markTerms(text, terms); }
+function markTerms(text, terms) {
+  const hits = [];
+  for (const t of terms) for (const m of text.matchAll(t.re)) if (m[0]) hits.push({ a: m.index, z: m.index + m[0].length, key: t.key });
   hits.sort((x, y) => x.a - y.a || (y.z - y.a) - (x.z - x.a));
   let out = "", i = 0;
   for (const h of hits) {
@@ -215,10 +257,10 @@ function markNew(text, vocab, lang) {
   }
   return out + esc(text.slice(i));
 }
-function renderSheet() {
+function renderSheet(spacer = true) {
   const v = state.pop && items("tu-vung").find(x => x.key === state.pop);
   if (!v) return "";
-  return `<div style="height:260px" aria-hidden="true"></div><div class="sheet" role="dialog" aria-label="Giải nghĩa"><div class="in">
+  return `${spacer ? `<div style="height:260px" aria-hidden="true"></div>` : ""}<div class="sheet" role="dialog" aria-label="Giải nghĩa"><div class="in">
     <div><span class="w" lang="${esc(book().lang)}">${esc(v.w)}</span> <span class="ipa">${esc(v.ipa)}</span> <span class="pos">${esc(v.pos)}</span></div>
     <div style="font-size:1.05rem">${esc(v.mean)}</div><div class="ex" lang="${esc(book().lang)}">${esc(v.ex)}</div>
     <div class="row"><button data-say="${esc(v.w)}">Nghe</button><button class="good" data-remember="${esc(v.key)}">Đã nhớ, không tô màu nữa</button><button id="closePop">Đóng</button></div>
@@ -229,12 +271,12 @@ function renderReading() {
   const b = book();
   if (!b || !b.pages.length) return `<p class="empty">Chưa có trang nào. Dán một trang sách cho Claude để bắt đầu.</p>`;
   const vocab = items("tu-vung"), vw = state.view, left = vocab.filter(v => !known.has(v.key)).length;
-  return `<div class="toolbar"><span class="seg" role="group" aria-label="Hiển thị">
+  return `<div class="toolbar"><button class="primary" id="openReader">Đọc kiểu Kindle</button><span class="seg" role="group" aria-label="Hiển thị">
       <button data-view="both" aria-pressed="${vw === "both"}">Song ngữ</button><button data-view="src" aria-pressed="${vw === "src"}">Bản gốc</button><button data-view="vi" aria-pressed="${vw === "vi"}">Bản dịch</button></span>
       <span class="stat">${b.pages.length} trang · ${left} từ mới chưa nhớ</span></div>` +
     b.pages.map(p => `<article class="page"><div class="page-head"><span class="label">Trang ${pad(p.n)}${p.label ? ` · trang sách ${esc(p.label)}` : ""}</span><span class="pg">${esc(p.date || "")}</span></div>
       ${vw !== "vi" ? `<div class="src">${(p.source || []).map(t => `<p lang="${esc(b.lang)}">${markNew(t, vocab, b.lang)}</p>`).join("")}</div>` : ""}
-      ${vw !== "src" ? (p.translation || []).map(t => `<p>${esc(t)}</p>`).join("") : ""}
+      ${vw !== "src" ? (p.translation || []).map(t => `<p>${markVi(t, viTerms(p))}</p>`).join("") : ""}
       ${p.note ? `<p class="note">${esc(p.note)}</p>` : ""}
       ${(p.hard || []).length ? `<details class="hard"><summary>Phân tích câu khó (${p.hard.length})</summary><ul>${p.hard.map(h => `<li><div class="quote" lang="${esc(b.lang)}">${esc(h.s)}</div><div>${esc(h.parts)}</div><div class="pg">${esc(h.mean)}</div></li>`).join("")}</ul></details>` : ""}
       ${p.dbId && isOwner ? `<button class="danger" data-del="${esc(p.dbId)}">${state.confirmDel === p.dbId ? "Bấm lần nữa để xoá trang này" : "Xoá trang"}</button>` : ""}</article>`).join("");
@@ -296,7 +338,7 @@ function renderAdd() {
   if (!isOwner) return `<p class="empty">Chỉ chủ sổ tay mới thêm được trang mới.</p>`;
   const b = book(), next = b ? (b.pages.length ? b.pages[b.pages.length - 1].n + 1 : 1) : 1;
   const r = state.result || (state.book !== "__new" && b && b.pages[b.pages.length - 1]);
-  const vocab = items("tu-vung"), L = esc(b ? b.lang : "en"), src = (r && r.source) || [], vi = (r && r.translation) || [];
+  const vocab = items("tu-vung"), vt = viTerms(r), L = esc(b ? b.lang : "en"), src = (r && r.source) || [], vi = (r && r.translation) || [];
   return `<div class="add">
     <div class="field"><label class="label" for="bookPick">Sách</label>
       <div class="row"><select id="bookPick">${BOOKS.map(x => `<option value="${esc(x.id)}"${x.id === state.book ? " selected" : ""}>${esc(x.title)}</option>`).join("")}<option value="__new"${state.book === "__new" ? " selected" : ""}>+ Sách mới…</option></select>
@@ -315,7 +357,7 @@ function renderAdd() {
     ${r ? `<article class="result page"><div class="page-head"><span class="label">${state.result ? "Đã lưu" : "Trang mới nhất"} · Trang ${pad(r.n)}${r.label ? ` · trang sách ${esc(r.label)}` : ""}</span><span class="pg">Bấm vào từ tô màu để xem nghĩa</span></div>
       ${Array.from({ length: Math.max(src.length, vi.length) }, (_, i) => `
         ${src[i] ? `<div class="src"><p lang="${L}">${markNew(src[i], vocab, b.lang)}</p></div>` : ""}
-        ${vi[i] ? `<p>${esc(vi[i])}</p>` : ""}`).join("")}
+        ${vi[i] ? `<p>${markVi(vi[i], vt)}</p>` : ""}`).join("")}
       ${r.note ? `<p class="note">${esc(r.note)}</p>` : ""}
       <h3>Từ vựng (${(r.vocab || []).length})</h3>${(r.vocab || []).map(v => { const k = b.id + "|tu-vung|" + v.w; return `<div><span class="${known.has(k) ? "" : "nw"}" role="button" tabindex="0" data-vk="${esc(k)}" lang="${L}"><b>${esc(v.w)}</b></span> <span class="ipa">${esc(v.ipa)}</span> — ${esc(v.mean)}</div>`; }).join("")}
       <h3>Mẫu câu (${(r.patterns || []).length})</h3>${(r.patterns || []).map(x => `<div style="margin-bottom:8px"><b>${esc(x.name)}</b>: <span class="formula">${esc(x.formula)}</span><div class="quote" lang="${L}">${esc(x.src)}</div><div class="help">${esc(x.explain)}</div></div>`).join("")}
@@ -336,7 +378,7 @@ Trả về DUY NHẤT một đối tượng JSON:
  "source":["đoạn gốc 1","đoạn gốc 2"],
  "translation":["bản dịch tiếng Việt tự nhiên, sát nghĩa, mỗi phần tử ứng với một đoạn gốc"],
  "note":"ghi chú ngắn về tên riêng, thuật ngữ, bối cảnh (chuỗi rỗng nếu không cần)",
- "vocab":[{"w":"từ","ipa":"IPA với tiếng Anh; pinyin với tiếng Trung","pos":"từ loại (với tiếng Trung thêm âm Hán Việt và cấp HSK, ví dụ: 'động từ · Hán Việt: ... · HSK5')","mean":"nghĩa tiếng Việt trong ngữ cảnh","ex":"câu ví dụ ngắn mới"}],
+ "vocab":[{"w":"từ","ipa":"IPA với tiếng Anh; pinyin với tiếng Trung","pos":"từ loại (với tiếng Trung thêm âm Hán Việt và cấp HSK, ví dụ: 'động từ · Hán Việt: ... · HSK5')","mean":"nghĩa tiếng Việt trong ngữ cảnh","vi":"cụm từ tiếng Việt dịch từ này, chép ĐÚNG Y NGUYÊN như nó xuất hiện trong translation (để tô màu)","ex":"câu ví dụ ngắn mới"}],
  "patterns":[{"name":"tên cấu trúc bằng tiếng Việt","formula":"công thức","src":"câu gốc trong trang","explain":"giải thích bằng tiếng Việt","ex":"ví dụ mới","exVi":"bản dịch tiếng Việt của ví dụ"}],
  "hard":[{"s":"câu khó trong trang","parts":"tách thành phần: chủ ngữ, vị ngữ, mệnh đề (tiếng Việt)","mean":"ý nghĩa"}]}
 Quy tắc: vocab 8–15 mục, CHỈ từ vượt trình độ trên (tiếng Anh: trên B2, thành ngữ, cụm động từ, từ học thuật; tiếng Trung: HSK5 trở lên, 成语, 书面语). patterns 2–5 mục. hard 1–3 câu. Nếu trang bị cắt giữa câu ở đầu/cuối, giữ nguyên dấu "..." trong cả bản gốc và bản dịch. Mọi giải thích bằng tiếng Việt.`;
@@ -402,8 +444,74 @@ async function pasteFromClipboard() {
   } catch (e) { fallback(); }
 }
 
+// ---- Đọc kiểu Kindle ----
+const rdKey = () => "rdpos:" + (book() ? book().id : "") + ":" + state.rdLang;
+function readerHTML() {
+  const b = book(); if (!b) return "";
+  const vocab = items("tu-vung"), lang = state.rdLang;
+  return b.pages.map(p => {
+    const vt = viTerms(p);
+    const src = p.source || [], vi = p.translation || [];
+    const body = lang === "both"
+      ? Array.from({ length: Math.max(src.length, vi.length) }, (_, i) => (src[i] ? `<p class="rd-src" lang="${esc(b.lang)}">${markNew(src[i], vocab, b.lang)}</p>` : "") + (vi[i] ? `<p>${markVi(vi[i], vt)}</p>` : "")).join("")
+      : lang === "src" ? src.map(t => `<p lang="${esc(b.lang)}">${markNew(t, vocab, b.lang)}</p>`).join("") : vi.map(t => `<p>${markVi(t, vt)}</p>`).join("");
+    return `<div class="rd-mark">Trang ${pad(p.n)}${p.label ? ` · trang sách ${esc(p.label)}` : ""}</div>${body}`;
+  }).join("");
+}
+function layoutReader(keepFrac) {
+  const view = document.getElementById("rdView"), c = document.getElementById("rdContent");
+  const frac = keepFrac != null ? keepFrac : state.rdPages > 1 ? state.rdPage / (state.rdPages - 1) : 0;
+  const W = view.clientWidth, G = 48;
+  c.style.width = W + "px"; c.style.columnWidth = W + "px"; c.style.columnGap = G + "px"; c.style.fontSize = state.rdSize + "px";
+  state.rdStep = W + G;
+  state.rdPages = Math.max(1, Math.round((c.scrollWidth + G) / state.rdStep));
+  goPage(Math.round(frac * (state.rdPages - 1)), false);
+}
+function goPage(n, anim = true) {
+  const c = document.getElementById("rdContent");
+  state.rdPage = Math.max(0, Math.min(state.rdPages - 1, n));
+  c.classList.toggle("anim", anim);
+  c.style.transform = `translateX(${-state.rdPage * state.rdStep}px)`;
+  const pct = state.rdPages > 1 ? Math.round(state.rdPage / (state.rdPages - 1) * 100) : 100;
+  document.getElementById("rdWhere").textContent = `Trang ${state.rdPage + 1} / ${state.rdPages}`;
+  document.getElementById("rdPct").textContent = `${pct}%`;
+  store.set(rdKey(), state.rdPages > 1 ? state.rdPage / (state.rdPages - 1) : 0);
+}
+function updateReader(frac) {
+  const r = document.getElementById("reader");
+  r.hidden = !state.rdOpen;
+  if (!state.rdOpen) return;
+  r.querySelectorAll("[data-rdlang]").forEach(x => x.setAttribute("aria-pressed", x.dataset.rdlang === state.rdLang));
+  document.getElementById("rdContent").innerHTML = readerHTML();
+  document.getElementById("rdSheet").innerHTML = renderSheet(false);
+  layoutReader(frac);
+}
+function openReader() { state.rdOpen = true; state.pop = null; updateReader(store.get(rdKey(), 0)); }
+document.getElementById("reader").addEventListener("click", e => {
+  if (e.target.closest("button, [data-vk], .sheet")) {
+    const b = e.target.closest("button");
+    if (b && b.id === "closeReader") { state.rdOpen = false; state.pop = null; e.stopPropagation(); return render(); }
+    if (b && b.dataset.rdlang) { state.rdLang = b.dataset.rdlang; store.set("rdLang", state.rdLang); e.stopPropagation(); return updateReader(store.get(rdKey(), 0)); }
+    if (b && b.dataset.rdsize) { state.rdSize = Math.max(14, Math.min(28, state.rdSize + 2 * b.dataset.rdsize)); store.set("rdSize", state.rdSize); e.stopPropagation(); return layoutReader(); }
+    return; // từ mới, nút trong khung giải nghĩa: để bộ xử lý chung lo
+  }
+  if (!e.target.closest("#rdView")) return;
+  if (state.pop) { state.pop = null; document.getElementById("rdSheet").innerHTML = ""; return; }
+  const box = document.getElementById("rdView").getBoundingClientRect();
+  goPage(state.rdPage + (e.clientX - box.left < box.width / 3 ? -1 : 1));
+});
+let touchX = null;
+document.getElementById("rdView").addEventListener("touchstart", e => { touchX = e.touches[0].clientX; }, { passive: true });
+document.getElementById("rdView").addEventListener("touchend", e => {
+  if (touchX == null) return;
+  const dx = e.changedTouches[0].clientX - touchX; touchX = null;
+  if (Math.abs(dx) > 40) { goPage(state.rdPage + (dx < 0 ? 1 : -1)); e.preventDefault(); }
+});
+addEventListener("resize", () => { if (state.rdOpen) layoutReader(); });
+
 function render() {
   BOOKS = allBooks();
+  if (state.rdOpen) updateReader();
   renderHeader();
   const t = tab(), v = document.getElementById("view");
   v.innerHTML = (t === "ban-dich" ? renderReading() + renderSheet() : t === "them-trang" ? renderAdd() + renderSheet() : renderStudy(t));
@@ -424,6 +532,7 @@ document.addEventListener("click", e => {
   const b = e.target.closest("button, #card, [data-vk]"); if (!b) return;
   const t = tab();
   if (b.id === "go") return translate();
+  if (b.id === "openReader") return openReader();
   if (b.id === "pasteBtn") return pasteFromClipboard();
   if (b.id === "clearDraft") { state.draft = ""; store.set("draft", ""); state.file = null; state.result = null; state.msg = ""; }
   if (b.id === "stop") return state.ctl && state.ctl.abort();
@@ -447,6 +556,8 @@ document.addEventListener("click", e => {
   render();
 });
 document.addEventListener("keydown", e => {
+  if (state.rdOpen && !state.pop && (e.key === "ArrowRight" || e.key === "ArrowLeft")) return goPage(state.rdPage + (e.key === "ArrowRight" ? 1 : -1));
+  if (state.rdOpen && e.key === "Escape" && !state.pop) { state.rdOpen = false; return render(); }
   if (e.key === "Escape" && state.pop) { state.pop = null; return render(); }
   if (e.target.classList && e.target.classList.contains("nw") && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.target.click(); return; } if (e.target.id === "card" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); state.flipped = !state.flipped; render(); } });
 document.getElementById("bookSel").onchange = e => { state.book = e.target.value; store.set("book", state.book); state.deck = null; render(); };

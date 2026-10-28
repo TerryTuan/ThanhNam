@@ -20,7 +20,7 @@ Người dùng dán (copy) từng trang sách vào; Claude dịch, giải nghĩa
    - `ban-dich-tieng-viet.md`: **nối thêm** bản dịch tiếng Việt của trang vào cuối file, có tiêu đề `## Trang NNN`, để đọc liền mạch từ đầu đến cuối.
    - `tu-vung.md`: nối thêm từ vựng mới vào bảng tổng hợp (bỏ qua từ đã có).
    - `mau-cau.md`: nối thêm các mẫu câu/cấu trúc ngữ pháp của trang (cấu trúc, câu gốc, giải thích, ví dụ + bản dịch ví dụ).
-   - `du-lieu.json`: thêm trang mới vào mảng `pages` (source, translation, note, vocab, patterns) — đây là dữ liệu cho trang học.
+   - `du-lieu.json`: thêm trang mới vào mảng `pages` (source, translation, note, vocab, patterns, hard) — đây là dữ liệu cho trang học. Mỗi từ vựng có trường `vi`: cụm tiếng Việt chép đúng y như trong bản dịch, để tô màu từ mới trong bản tiếng Việt.
    - Cập nhật danh sách sách và số trang trong `sach/README.md`.
 4. Chạy `python3 tools/build.py` rồi xuất bản lại `app/so-tay.html` lên cùng artifact
    https://claude.ai/artifact/LQp55JRNdBsgjCH1c1DYPA (dùng tham số `url` nếu ở cuộc hội thoại khác).

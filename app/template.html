@@ -351,7 +351,7 @@ function renderAdd() {
     <div class="field"><label class="label" for="draft">Nội dung trang (tiếng Anh hoặc tiếng Trung)</label>
       <div class="row"><button class="primary" id="pasteBtn">Dán và dịch</button>${state.draft || state.file ? `<button id="clearDraft">Xoá ô</button>` : ""}
         <label class="help"><input type="checkbox" id="autoGo"${state.autoGo ? " checked" : ""}> Tự dịch ngay khi dán</label></div>
-      ${state.pasteHint ? `<div class="status">Ô đã sẵn sàng. Trên điện thoại: nhấn giữ vào ô bên dưới rồi chọn <b>Dán</b>. Trên máy tính: bấm Ctrl+V (Mac: ⌘+V).</div>` : ""}
+      ${state.pasteHint ? `<div class="status">claude.ai không cho phần mềm tự lấy nội dung bộ nhớ${state.pasteWhy ? ` (${esc(state.pasteWhy)})` : ""}. Chạm vào ô bên dưới, chọn <b>Dán</b> trong bong bóng hiện lên. Phần mềm sẽ tự dịch ngay.</div>` : ""}
       <textarea id="draft" placeholder="Nhấn giữ vào đây rồi chọn Dán (hoặc Ctrl+V). Dán được cả chữ lẫn ảnh chụp màn hình.">${esc(state.draft)}</textarea>
       <div class="row">${canImage ? `<label class="help" for="img">Hoặc chọn ảnh chụp trang:</label><input type="file" id="img" accept="image/*">` : ""}
       <input type="text" id="pageLabel" placeholder="Số trang trong sách (không bắt buộc)" value="${esc(state.pageLabel)}"></div>
@@ -426,9 +426,10 @@ async function translate() {
 // Thử đọc bộ nhớ tạm ngay trong lần bấm (một số trình duyệt cho phép, iPhone có thể hiện bong bóng "Dán" để bấm).
 // Nếu bị chặn thì quay về cách cũ: đưa con trỏ vào ô để người dùng tự dán.
 async function pasteFromClipboard() {
-  const fallback = () => { state.pasteHint = true; render(); };
+  const fallback = why => { state.pasteHint = true; state.pasteWhy = why || ""; render(); };
   const cb = navigator.clipboard;
-  if (!cb || state.busy) return fallback();
+  if (state.busy) return;
+  if (!cb) return fallback("không có quyền đọc bộ nhớ");
   try {
     if (canImage && cb.read) {
       try {
@@ -443,10 +444,10 @@ async function pasteFromClipboard() {
       } catch (e) { if (!cb.readText) throw e; }
     }
     const text = cb.readText ? await cb.readText() : "";
-    if (!text.trim()) return fallback();
+    if (!text.trim()) return fallback("bộ nhớ trống hoặc không đọc được");
     state.draft = text; store.set("draft", text); state.file = null; state.pasteHint = false;
     translate();
-  } catch (e) { fallback(); }
+  } catch (e) { fallback("bị chặn: " + ((e && e.name) || "lỗi")); }
 }
 
 // ---- Đọc kiểu Kindle ----

@@ -88,6 +88,22 @@ input[type="search"] { font: inherit; font-size: .88rem; padding: 6px 10px; bord
 .empty { padding: 32px 0; color: var(--muted); text-align: center; }
 @media (prefers-reduced-motion: no-preference) { .card { transition: border-color .15s; } }
 .card:hover { border-color: var(--accent); }
+
+/* Thêm trang */
+.add { display: grid; gap: 14px; }
+.add .field { display: grid; gap: 6px; }
+.add textarea { font-family: var(--font-read); font-size: 1rem; line-height: 1.6; min-height: 220px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); resize: vertical; width: 100%; }
+.add input[type="text"], .add select { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); min-width: 0; }
+.add .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.add .help { font-size: .85rem; color: var(--muted); }
+.thumb { max-height: 160px; border: 1px solid var(--line); border-radius: 8px; }
+.status { padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--ink); font-size: .9rem; white-space: pre-wrap; }
+.status.err { background: var(--surface); border: 1px solid var(--line); }
+details.hard { margin-top: 6px; }
+details.hard summary { cursor: pointer; color: var(--accent); font-size: .9rem; }
+details.hard li { margin-bottom: 8px; }
+.result h3 { font-size: .95rem; margin: 16px 0 6px; }
+.danger { color: var(--muted); font-size: .8rem; padding: 2px 8px; }
 </style>
 
 <header>
@@ -97,23 +113,37 @@ input[type="search"] { font: inherit; font-size: .88rem; padding: 6px 10px; bord
       <a href="#ban-dich" data-tab="ban-dich">Bản dịch<span class="n" id="nPages">0</span></a>
       <a href="#tu-vung" data-tab="tu-vung">Từ vựng<span class="n" id="nVocab">0</span></a>
       <a href="#mau-cau" data-tab="mau-cau">Mẫu câu<span class="n" id="nPat">0</span></a>
+      <a href="#them-trang" data-tab="them-trang">+ Thêm trang</a>
     </nav>
   </div>
 </header>
 <main><div class="wrap" id="view"></div></main>
 
 <script>
-const BOOKS = /*__DATA__*/[];
+const REPO_BOOKS = /*__DATA__*/[];
+let dbPages = [], db = null, sample = null, isOwner = false, canImage = false;
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 };
-const state = { book: store.get("book", BOOKS[0] && BOOKS[0].id), mode: { "tu-vung": "list", "mau-cau": "list" }, filter: "all", q: "", deck: null, idx: 0, flipped: false, showSrc: false };
+const state = { draft: store.get("draft", ""), pageLabel: "", file: null, busy: false, msg: "", err: false, result: null, newTitle: "", confirmDel: null, book: store.get("book", REPO_BOOKS[0] && REPO_BOOKS[0].id), mode: { "tu-vung": "list", "mau-cau": "list" }, filter: "all", q: "", deck: null, idx: 0, flipped: false, showSrc: false };
 const known = new Set(store.get("known", []));
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const pad = n => String(n).padStart(3, "0");
+// Trang trong repo + trang thêm từ phần mềm (lưu trong db), gộp theo số thứ tự.
+function allBooks() {
+  const list = REPO_BOOKS.map(b => ({ ...b, pages: [...b.pages] }));
+  for (const p of dbPages) {
+    let b = list.find(x => x.id === p.book);
+    if (!b) list.push(b = { id: p.book, title: p.bookTitle || p.book, original: p.bookOriginal || "", author: "", lang: p.lang || "en", pages: [] });
+    if (!b.pages.some(x => x.n === p.n)) b.pages.push(p);
+  }
+  list.forEach(b => b.pages.sort((a, c) => a.n - c.n));
+  return list;
+}
+let BOOKS = allBooks();
 const book = () => BOOKS.find(b => b.id === state.book) || BOOKS[0];
-const tab = () => ["ban-dich", "tu-vung", "mau-cau"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "ban-dich";
+const tab = () => ["ban-dich", "tu-vung", "mau-cau", "them-trang"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "ban-dich";
 
 function items(kind) {
   const b = book(); if (!b) return [];
@@ -155,7 +185,9 @@ function renderReading() {
     b.pages.map(p => `<article class="page"><div class="page-head"><span class="label">Trang ${pad(p.n)}</span><span class="pg">${esc(p.date || "")}</span></div>
       ${state.showSrc ? `<div class="src">${(p.source || []).map(t => `<p lang="${esc(b.lang)}">${esc(t)}</p>`).join("")}</div>` : ""}
       ${(p.translation || []).map(t => `<p>${esc(t)}</p>`).join("")}
-      ${p.note ? `<p class="note">${esc(p.note)}</p>` : ""}</article>`).join("");
+      ${p.note ? `<p class="note">${esc(p.note)}</p>` : ""}
+      ${(p.hard || []).length ? `<details class="hard"><summary>Phân tích câu khó (${p.hard.length})</summary><ul>${p.hard.map(h => `<li><div class="quote" lang="${esc(b.lang)}">${esc(h.s)}</div><div>${esc(h.parts)}</div><div class="pg">${esc(h.mean)}</div></li>`).join("")}</ul></details>` : ""}
+      ${p.dbId && isOwner ? `<button class="danger" data-del="${esc(p.dbId)}">${state.confirmDel === p.dbId ? "Bấm lần nữa để xoá trang này" : "Xoá trang"}</button>` : ""}</article>`).join("");
 }
 
 function toolbar(kind) {
@@ -207,10 +239,96 @@ function renderStudy(kind) {
   return toolbar(kind) + body;
 }
 
+function slug(s) { return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "sach"; }
+
+function renderAdd() {
+  if (!sample || !db) return `<p class="empty">Phần thêm trang cần mở trang này trên claude.ai khi đã đăng nhập. Đang kết nối…</p>`;
+  if (!isOwner) return `<p class="empty">Chỉ chủ sổ tay mới thêm được trang mới.</p>`;
+  const b = book(), next = b ? (b.pages.length ? b.pages[b.pages.length - 1].n + 1 : 1) : 1;
+  const r = state.result;
+  return `<div class="add">
+    <div class="field"><label class="label" for="bookPick">Sách</label>
+      <div class="row"><select id="bookPick">${BOOKS.map(x => `<option value="${esc(x.id)}"${x.id === state.book ? " selected" : ""}>${esc(x.title)}</option>`).join("")}<option value="__new"${state.book === "__new" ? " selected" : ""}>+ Sách mới…</option></select>
+      ${state.book === "__new" ? `<input type="text" id="newTitle" placeholder="Tên sách mới" value="${esc(state.newTitle)}">` : `<span class="stat">Trang sẽ lưu: ${pad(next)}</span>`}</div></div>
+    <div class="field"><label class="label" for="draft">Nội dung trang (tiếng Anh hoặc tiếng Trung)</label>
+      <textarea id="draft" placeholder="Dán chữ của trang sách vào đây. Cũng có thể dán thẳng ảnh chụp màn hình (Ctrl+V).">${esc(state.draft)}</textarea>
+      <div class="row">${canImage ? `<label class="help" for="img">Hoặc chọn ảnh chụp trang:</label><input type="file" id="img" accept="image/*">` : ""}
+      <input type="text" id="pageLabel" placeholder="Số trang trong sách (không bắt buộc)" value="${esc(state.pageLabel)}"></div>
+      ${state.file ? `<div class="row"><img class="thumb" id="thumb" alt="Ảnh trang sách"><button id="dropImg">Bỏ ảnh</button></div>` : ""}</div>
+    <div class="row"><button class="primary" id="go"${state.busy ? " disabled" : ""}>${state.busy ? "Đang dịch…" : "Dịch và lưu trang"}</button>${state.busy ? `<button id="stop">Dừng</button>` : ""}
+      <span class="help">Mất khoảng 30–90 giây. Lần đầu Claude sẽ hỏi bạn cho phép.</span></div>
+    ${state.msg ? `<div class="status${state.err ? " err" : ""}" id="status">${esc(state.msg)}</div>` : ""}
+    ${r ? `<div class="result"><span class="label">Đã lưu · Trang ${pad(r.n)}</span>
+      ${r.translation.map(t => `<p style="font-family:var(--font-read)">${esc(t)}</p>`).join("")}
+      <h3>Từ vựng (${r.vocab.length})</h3>${r.vocab.map(v => `<div><b lang="${esc(r.lang)}">${esc(v.w)}</b> <span class="ipa">${esc(v.ipa)}</span> — ${esc(v.mean)}</div>`).join("")}
+      <h3>Mẫu câu (${r.patterns.length})</h3>${r.patterns.map(x => `<div><b>${esc(x.name)}</b>: <span class="formula">${esc(x.formula)}</span></div>`).join("")}
+      <p class="help">Xem đầy đủ ở tab Bản dịch, Từ vựng, Mẫu câu.</p></div>` : ""}
+  </div>`;
+}
+
+function buildPrompt(b, lang, next, prevText, hasImage) {
+  return `Bạn là gia sư ngôn ngữ cho người Việt. Người học có trình độ tiếng Anh IELTS 6.0 (~B2) và tiếng Trung HSK 4.
+Họ đang đọc cuốn "${b.title}"${b.original ? ` (${b.original})` : ""}. Đây là trang thứ ${next} họ dịch.
+${prevText ? `Đoạn dịch tiếng Việt của trang trước (để giữ mạch văn và cách xưng hô):\n"""${prevText}"""\n` : ""}
+${hasImage ? "Trang sách nằm trong ảnh đính kèm: chép lại nguyên văn chữ trong ảnh (bỏ số chú thích, dòng trạng thái của máy đọc sách)." : ""}
+${state.draft.trim() ? `Nội dung trang:\n"""${state.draft.trim()}"""` : ""}
+
+Trả về DUY NHẤT một đối tượng JSON:
+{"lang":"en" hoặc "zh",
+ "source":["đoạn gốc 1","đoạn gốc 2"],
+ "translation":["bản dịch tiếng Việt tự nhiên, sát nghĩa, mỗi phần tử ứng với một đoạn gốc"],
+ "note":"ghi chú ngắn về tên riêng, thuật ngữ, bối cảnh (chuỗi rỗng nếu không cần)",
+ "vocab":[{"w":"từ","ipa":"IPA với tiếng Anh; pinyin với tiếng Trung","pos":"từ loại (với tiếng Trung thêm âm Hán Việt và cấp HSK, ví dụ: 'động từ · Hán Việt: ... · HSK5')","mean":"nghĩa tiếng Việt trong ngữ cảnh","ex":"câu ví dụ ngắn mới"}],
+ "patterns":[{"name":"tên cấu trúc bằng tiếng Việt","formula":"công thức","src":"câu gốc trong trang","explain":"giải thích bằng tiếng Việt","ex":"ví dụ mới","exVi":"bản dịch tiếng Việt của ví dụ"}],
+ "hard":[{"s":"câu khó trong trang","parts":"tách thành phần: chủ ngữ, vị ngữ, mệnh đề (tiếng Việt)","mean":"ý nghĩa"}]}
+Quy tắc: vocab 8–15 mục, CHỈ từ vượt trình độ trên (tiếng Anh: trên B2, thành ngữ, cụm động từ, từ học thuật; tiếng Trung: HSK5 trở lên, 成语, 书面语). patterns 2–5 mục. hard 1–3 câu. Nếu trang bị cắt giữa câu ở đầu/cuối, giữ nguyên dấu "..." trong cả bản gốc và bản dịch. Mọi giải thích bằng tiếng Việt.`;
+}
+
+async function translate() {
+  const hasImage = !!state.file;
+  if (!state.draft.trim() && !hasImage) { state.msg = "Hãy dán nội dung trang hoặc chọn ảnh trước."; state.err = true; return render(); }
+  let b = book();
+  if (state.book === "__new") {
+    const t = state.newTitle.trim();
+    if (!t) { state.msg = "Hãy nhập tên sách mới."; state.err = true; return render(); }
+    b = { id: slug(t), title: t, original: "", lang: "en", pages: BOOKS.find(x => x.id === slug(t))?.pages || [] };
+  }
+  const next = b.pages.length ? b.pages[b.pages.length - 1].n + 1 : 1;
+  const prev = b.pages[b.pages.length - 1];
+  state.busy = true; state.err = false; state.result = null; state.msg = "Claude đang đọc và dịch trang…"; state.ctl = new AbortController(); render();
+  try {
+    const out = await sample.json(buildPrompt(b, b.lang, next, prev ? (prev.translation || []).join("\n").slice(-1500) : "", hasImage),
+      { signal: state.ctl.signal, ...(hasImage ? { images: [state.file] } : {}),
+        onText: ({ text }) => { const el = document.getElementById("status"); if (el) el.textContent = `Claude đang viết… (${text.length} ký tự)`; } });
+    if (!out || !Array.isArray(out.translation) || !out.translation.length) throw { code: "invalid_json" };
+    const page = { book: b.id, bookTitle: b.title, bookOriginal: b.original || "", lang: out.lang === "zh" ? "zh" : "en", n: next,
+      label: state.pageLabel.trim(), date: new Date().toISOString().slice(0, 10),
+      source: (out.source || []).map(String), translation: out.translation.map(String), note: String(out.note || ""),
+      vocab: (out.vocab || []).filter(v => v && v.w), patterns: (out.patterns || []).filter(x => x && x.name), hard: (out.hard || []).filter(h => h && h.s) };
+    await db.collection("pages").doc(`${b.id}-${pad(next)}`).set(page);
+    state.result = page; state.draft = ""; store.set("draft", ""); state.file = null; state.pageLabel = "";
+    state.book = b.id; store.set("book", b.id); state.msg = ""; state.newTitle = "";
+  } catch (e) {
+    state.err = true;
+    state.msg = { cancelled: "Đã dừng.", not_granted: "Bạn chưa cho phép trang dùng Claude. Tải lại trang và chọn Cho phép.",
+      rate_limited: "Claude đang bận, đợi một lúc rồi thử lại.", invalid_json: "Claude trả lời sai định dạng. Bấm dịch lại.",
+      prompt_too_large: "Trang quá dài. Hãy chia làm hai lần dán.", image_rejected: "Ảnh không đọc được. Hãy thử ảnh khác hoặc dán chữ." }[e && e.code]
+      || `Không dịch được (${(e && (e.code || e.message)) || "lỗi"}). Thử lại sau.`;
+  } finally { state.busy = false; render(); }
+}
+
 function render() {
+  BOOKS = allBooks();
   renderHeader();
   const t = tab(), v = document.getElementById("view");
-  v.innerHTML = t === "ban-dich" ? renderReading() : renderStudy(t);
+  v.innerHTML = t === "ban-dich" ? renderReading() : t === "them-trang" ? renderAdd() : renderStudy(t);
+  const d = document.getElementById("draft");
+  if (d) d.oninput = () => { state.draft = d.value; store.set("draft", d.value); };
+  const nt = document.getElementById("newTitle"); if (nt) nt.oninput = () => { state.newTitle = nt.value; };
+  const pl = document.getElementById("pageLabel"); if (pl) pl.oninput = () => { state.pageLabel = pl.value; };
+  const bp = document.getElementById("bookPick"); if (bp) bp.onchange = () => { state.book = bp.value; if (bp.value !== "__new") store.set("book", bp.value); render(); };
+  const img = document.getElementById("img"); if (img) img.onchange = () => { if (img.files[0]) { state.file = img.files[0]; render(); } };
+  const th = document.getElementById("thumb"); if (th && state.file) th.src = URL.createObjectURL(state.file);
   const q = document.getElementById("q");
   if (q) q.oninput = () => { state.q = q.value; const pos = q.selectionStart; render(); const n = document.getElementById("q"); n.focus(); n.setSelectionRange(pos, pos); };
 }
@@ -218,7 +336,14 @@ function render() {
 document.addEventListener("click", e => {
   const b = e.target.closest("button, #card"); if (!b) return;
   const t = tab();
+  if (b.id === "go") return translate();
+  if (b.id === "stop") return state.ctl && state.ctl.abort();
   if (b.id === "srcBtn") state.showSrc = !state.showSrc;
+  else if (b.id === "dropImg") state.file = null;
+  else if (b.dataset.del) {
+    if (state.confirmDel !== b.dataset.del) state.confirmDel = b.dataset.del;
+    else { state.confirmDel = null; db.collection("pages").doc(b.dataset.del).delete().catch(() => {}); }
+  }
   else if (b.dataset.mode) { state.mode[t] = b.dataset.mode; state.deck = null; state.flipped = false; }
   else if (b.dataset.filter) { state.filter = b.dataset.filter; state.deck = null; state.flipped = false; }
   else if (b.dataset.say) return speak(b.dataset.say);
@@ -231,6 +356,19 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("keydown", e => { if (e.target.id === "card" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); state.flipped = !state.flipped; render(); } });
 document.getElementById("bookSel").onchange = e => { state.book = e.target.value; store.set("book", state.book); state.deck = null; render(); };
+document.addEventListener("paste", e => {
+  if (tab() !== "them-trang" || !canImage) return;
+  const f = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith("image/"))?.getAsFile();
+  if (f) { e.preventDefault(); state.file = f; render(); }
+});
+(async () => {
+  const use = n => window.claude ? window.claude.use(n).catch(() => null) : Promise.resolve(null);
+  const [d, s, u] = await Promise.all([use("db"), use("sample"), use("user")]);
+  db = d; sample = s; isOwner = !!(u && await u.isOwner());
+  if (s) canImage = !!(await s.limits().catch(() => null))?.images;
+  if (db) db.collection("pages").onSnapshot(snap => { dbPages = snap.docs.map(x => ({ ...x.data(), dbId: x.id })); render(); }, () => {});
+  render();
+})();
 addEventListener("hashchange", () => { state.flipped = false; render(); window.scrollTo(0, 0); });
 render();
 </script>

@@ -26,3 +26,10 @@ Người dùng dán (copy) từng trang sách vào; Claude dịch, giải nghĩa
    https://claude.ai/artifact/LQp55JRNdBsgjCH1c1DYPA (dùng tham số `url` nếu ở cuộc hội thoại khác).
    Trang học có 3 tab: Bản dịch · Từ vựng · Mẫu câu (danh sách + thẻ ghi nhớ).
 5. Commit (message dạng `<ten-sach>: trang NNN`) và push lên nhánh đang làm việc.
+
+## Trang thêm từ phần mềm (tab "+ Thêm trang")
+Người dùng có thể tự dán chữ hoặc ảnh trang sách vào tab "+ Thêm trang" của trang học. Trang được dịch ngay trong phần mềm
+và lưu vào cơ sở dữ liệu của artifact (collection `pages`, id `<ten-sach>-NNN`, cùng cấu trúc với một phần tử `pages` trong `du-lieu.json`, thêm trường `hard`).
+Khi người dùng nhắc "đồng bộ", hoặc trước khi lưu một trang mới qua chat: đọc collection `pages` bằng ArtifactData,
+chép các trang chưa có vào repo (trang-NNN.md, ban-dich-tieng-viet.md, tu-vung.md, mau-cau.md, du-lieu.json), build lại, xuất bản lại rồi commit.
+Không xoá document trong db trừ khi người dùng yêu cầu (trang trong repo luôn được ưu tiên khi trùng số thứ tự).

@@ -19,5 +19,10 @@ Người dùng dán (copy) từng trang sách vào; Claude dịch, giải nghĩa
    - `trang-NNN.md`: toàn bộ nội dung trang (bản gốc + dịch + từ vựng + ngữ pháp). NNN là số thứ tự tăng dần 001, 002, ... (không phải số trang in trong sách; ghi số trang thật vào tiêu đề nếu người dùng cho biết).
    - `ban-dich-tieng-viet.md`: **nối thêm** bản dịch tiếng Việt của trang vào cuối file, có tiêu đề `## Trang NNN`, để đọc liền mạch từ đầu đến cuối.
    - `tu-vung.md`: nối thêm từ vựng mới vào bảng tổng hợp (bỏ qua từ đã có).
+   - `mau-cau.md`: nối thêm các mẫu câu/cấu trúc ngữ pháp của trang (cấu trúc, câu gốc, giải thích, ví dụ + bản dịch ví dụ).
+   - `du-lieu.json`: thêm trang mới vào mảng `pages` (source, translation, note, vocab, patterns) — đây là dữ liệu cho trang học.
    - Cập nhật danh sách sách và số trang trong `sach/README.md`.
-4. Commit (message dạng `<ten-sach>: trang NNN`) và push lên nhánh đang làm việc.
+4. Chạy `python3 tools/build.py` rồi xuất bản lại `app/so-tay.html` lên cùng artifact
+   https://claude.ai/artifact/LQp55JRNdBsgjCH1c1DYPA (dùng tham số `url` nếu ở cuộc hội thoại khác).
+   Trang học có 3 tab: Bản dịch · Từ vựng · Mẫu câu (danh sách + thẻ ghi nhớ).
+5. Commit (message dạng `<ten-sach>: trang NNN`) và push lên nhánh đang làm việc.

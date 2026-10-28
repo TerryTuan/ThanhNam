@@ -8,5 +8,6 @@ Dán từng trang sách tiếng Anh hoặc tiếng Trung vào Claude. Mỗi tran
 - lưu lại theo thứ tự trong `sach/<ten-sach>/`.
 
 Đọc lại liền mạch: mở `sach/<ten-sach>/ban-dich-tieng-viet.md`.
-Ôn từ vựng: mở `sach/<ten-sach>/tu-vung.md`.
+Ôn từ vựng: mở `sach/<ten-sach>/tu-vung.md`; mẫu câu: `mau-cau.md`.
+Học bằng thẻ ghi nhớ: trang học https://claude.ai/artifact/LQp55JRNdBsgjCH1c1DYPA (mã nguồn `app/`, dựng bằng `python3 tools/build.py`).
 Quy trình chi tiết: xem `CLAUDE.md`.

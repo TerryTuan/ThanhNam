@@ -1,0 +1,47 @@
+{
+  "id": "the-gioi-2050",
+  "title": "Thế giới 2050",
+  "original": "The World in 2050",
+  "author": "Laurence C. Smith",
+  "lang": "en",
+  "pages": [
+    {
+      "n": 1,
+      "date": "2026-10-28",
+      "source": [
+        "...winter. The name was popularized in a book by Fiona Hill and Clifford Gaddy of the Brookings Institution, but the concept is as ancient as life itself. When it arrives, the birds depart, the ground cracks, frogs freeze solid in their mud beds. At the extreme end, if temperatures plunge to -40°F (or -40°C, the Fahrenheit and Celsius temperature scales converge at this number) steel breaks, engines fail, and manual work becomes virtually impossible. Human enterprise grinds to a halt.",
+        "Regardless of country, all NORC northerners seem to..."
+      ],
+      "translation": [
+        "...mùa đông. Cái tên này trở nên phổ biến nhờ một cuốn sách của Fiona Hill và Clifford Gaddy thuộc Viện Brookings, nhưng bản thân khái niệm này thì cổ xưa như chính sự sống. Khi nó đến, chim chóc bay đi, mặt đất nứt nẻ, ếch đông cứng trong những ổ bùn của chúng. Ở mức khắc nghiệt nhất, nếu nhiệt độ tụt xuống -40°F (hay -40°C, vì thang nhiệt độ Fahrenheit và Celsius trùng nhau đúng ở con số này), thép gãy vỡ, động cơ chết máy, và lao động chân tay gần như không thể thực hiện được. Mọi hoạt động của con người đều đình trệ.",
+        "Bất kể ở quốc gia nào, tất cả người dân miền bắc thuộc các nước NORC dường như..."
+      ],
+      "note": "NORC (Northern Rim Countries): các nước vành đai phương Bắc gồm Mỹ, Canada, Iceland, Greenland, Na Uy, Thụy Điển, Phần Lan, Nga.",
+      "vocab": [
+        {"w": "popularize", "ipa": "/ˈpɒpjələraɪz/", "pos": "v", "mean": "làm cho phổ biến, phổ cập", "ex": "The idea was popularized by a TV series."},
+        {"w": "concept", "ipa": "/ˈkɒnsept/", "pos": "n", "mean": "khái niệm", "ex": "The concept of time is hard to explain."},
+        {"w": "ancient", "ipa": "/ˈeɪnʃənt/", "pos": "adj", "mean": "cổ xưa, lâu đời", "ex": "an ancient tradition"},
+        {"w": "depart", "ipa": "/dɪˈpɑːt/", "pos": "v", "mean": "rời đi (trang trọng hơn leave)", "ex": "The train departs at 9 a.m."},
+        {"w": "freeze solid", "ipa": "/friːz ˈsɒlɪd/", "pos": "v phr", "mean": "đông cứng hoàn toàn", "ex": "The lake froze solid overnight."},
+        {"w": "mud bed", "ipa": "/mʌd bed/", "pos": "n", "mean": "ổ bùn, lớp bùn (nơi ếch ngủ đông)", "ex": "Frogs hibernate in mud beds."},
+        {"w": "at the extreme end", "ipa": "/ɪkˈstriːm/", "pos": "phr", "mean": "ở mức cực đoan nhất, ở thái cực", "ex": "At the extreme end, some people work 80 hours a week."},
+        {"w": "plunge", "ipa": "/plʌndʒ/", "pos": "v", "mean": "tụt mạnh, lao xuống đột ngột", "ex": "Prices plunged by 30%."},
+        {"w": "converge", "ipa": "/kənˈvɜːdʒ/", "pos": "v", "mean": "hội tụ, gặp nhau tại một điểm", "ex": "The two roads converge near the river."},
+        {"w": "temperature scale", "ipa": "/ˈtemprətʃə skeɪl/", "pos": "n", "mean": "thang đo nhiệt độ", "ex": "the Celsius temperature scale"},
+        {"w": "manual work", "ipa": "/ˈmænjuəl wɜːk/", "pos": "n", "mean": "lao động chân tay", "ex": "Manual work is tiring in hot weather."},
+        {"w": "virtually", "ipa": "/ˈvɜːtʃuəli/", "pos": "adv", "mean": "gần như, hầu như (= almost)", "ex": "It's virtually impossible to finish today."},
+        {"w": "enterprise", "ipa": "/ˈentəpraɪz/", "pos": "n", "mean": "hoạt động, công cuộc (ở đây không phải \"doanh nghiệp\")", "ex": "Human enterprise depends on cheap energy."},
+        {"w": "grind to a halt", "ipa": "/ɡraɪnd tu ə hɔːlt/", "pos": "idiom", "mean": "dần dần ngừng hẳn, đình trệ", "ex": "Traffic ground to a halt after the accident."},
+        {"w": "regardless of", "ipa": "/rɪˈɡɑːdləs əv/", "pos": "prep", "mean": "bất kể, không phân biệt", "ex": "Everyone is welcome regardless of age."},
+        {"w": "northerner", "ipa": "/ˈnɔːðənə/", "pos": "n", "mean": "người miền bắc", "ex": "Northerners are used to long winters."}
+      ],
+      "patterns": [
+        {"name": "Bị động có \"by\"", "formula": "S + was/were + V3 + (in N) + by + người", "src": "The name was popularized in a book by Fiona Hill and Clifford Gaddy.", "explain": "Nhấn mạnh sự việc thay vì người làm. Ở đây \"by\" đi với \"a book\" (sách của ai), không đi với động từ.", "ex": "The theory was made famous in a lecture by Einstein.", "exVi": "Lý thuyết này trở nên nổi tiếng qua một bài giảng của Einstein."},
+        {"name": "So sánh bằng + \"itself\"", "formula": "as + adj + as + N + itself", "src": "The concept is as ancient as life itself.", "explain": "\"itself\" đứng sau danh từ để nhấn mạnh: \"chính\" cái đó, tức là ở mức tối đa.", "ex": "This problem is as old as the city itself.", "exVi": "Vấn đề này cũ như chính thành phố này."},
+        {"name": "Câu điều kiện loại 0", "formula": "If + hiện tại đơn, hiện tại đơn", "src": "If temperatures plunge to -40°F, steel breaks, engines fail.", "explain": "Dùng cho quy luật tự nhiên, sự thật luôn đúng; cả hai vế đều chia hiện tại đơn, không dùng \"will\".", "ex": "If you heat ice, it melts.", "exVi": "Nếu bạn làm nóng băng, nó tan chảy."},
+        {"name": "Liệt kê không dùng \"and\"", "formula": "Clause, clause, clause.", "src": "When it arrives, the birds depart, the ground cracks, frogs freeze solid in their mud beds.", "explain": "Các mệnh đề ngắn nối bằng dấu phẩy, tạo nhịp nhanh và gây ấn tượng. Hợp văn miêu tả; không nên lạm dụng trong IELTS Writing.", "ex": "The bell rings, the doors open, the children run out.", "exVi": "Chuông reo, cửa mở, lũ trẻ chạy ùa ra."},
+        {"name": "regardless of / seem to", "formula": "Regardless of + N/V-ing, S + seem(s) to + V", "src": "Regardless of country, all NORC northerners seem to...", "explain": "\"regardless of\" = bất kể; \"seem to + V nguyên mẫu\" = dường như.", "ex": "Regardless of the weather, she seems to enjoy running every morning.", "exVi": "Bất kể thời tiết thế nào, cô ấy dường như vẫn thích chạy bộ mỗi sáng."}
+      ]
+    }
+  ]
+}

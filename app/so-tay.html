@@ -1,0 +1,236 @@
+<title>Sổ tay đọc sách</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&display=swap">
+<style>
+/* Layout: one reading column; sticky header with book name + three tabs; cards only for flashcards. */
+:root {
+  --bg: #eef2f5;        /* frost paper */
+  --surface: #ffffff;
+  --ink: #17222d;       /* deep polar ink */
+  --muted: #5b6b7a;
+  --line: #d3dce4;
+  --accent: #1f6f8b;    /* glacier blue */
+  --accent-soft: #dcebf1;
+  --known: #2f7d4f;
+  --known-soft: #dff0e5;
+  --font-read: "Literata", "Noto Serif", "Noto Serif SC", Georgia, serif;
+  --font-ui: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --font-ipa: "Noto Sans", "Lucida Sans Unicode", "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f161d; --surface: #17212b; --ink: #e3eaf0; --muted: #93a3b2; --line: #2a3744;
+  --accent: #6cb8d4; --accent-soft: #1b3341; --known: #7cc99a; --known-soft: #1a3326; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #0f161d; --surface: #17212b; --ink: #e3eaf0; --muted: #93a3b2; --line: #2a3744;
+  --accent: #6cb8d4; --accent-soft: #1b3341; --known: #7cc99a; --known-soft: #1a3326; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 15px; line-height: 1.5; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 760px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
+header .wrap { padding-block: 16px 0; display: grid; gap: 10px; }
+.book { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.book h1 { margin: 0; font-family: var(--font-read); font-size: 1.5rem; font-weight: 600; text-wrap: balance; }
+.book .orig { color: var(--muted); font-size: .9rem; }
+.book select { margin-left: auto; font: inherit; font-size: .85rem; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
+nav.tabs { display: flex; gap: 4px; overflow-x: auto; }
+nav.tabs a { padding: 8px 12px 10px; text-decoration: none; color: var(--muted); font-weight: 500; border-bottom: 3px solid transparent; white-space: nowrap; }
+nav.tabs a .n { font-size: .75rem; margin-left: 4px; padding: 1px 6px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-variant-numeric: tabular-nums; }
+nav.tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+nav.tabs a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+main .wrap { padding-block: 20px 48px; }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; background: var(--surface); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--bg); }
+button { font: inherit; font-size: .88rem; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+button.good { background: var(--known); border-color: var(--known); color: var(--bg); }
+input[type="search"] { font: inherit; font-size: .88rem; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); flex: 1 1 160px; min-width: 0; }
+.stat { color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+.label { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+
+/* Bản dịch */
+.page { padding-block: 8px 24px; border-bottom: 1px solid var(--line); }
+.page + .page { padding-top: 24px; }
+.page-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.page p { font-family: var(--font-read); font-size: 1.08rem; line-height: 1.75; margin: 0 0 .9em; max-width: 65ch; }
+.page .src p { color: var(--muted); font-size: .98rem; }
+.page .note { font-size: .88rem; color: var(--muted); border-left: 2px solid var(--line); padding-left: 10px; }
+.src { margin-bottom: 12px; }
+
+/* Danh sách */
+.items { display: grid; gap: 0; }
+.item { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.item > div { min-width: 0; }
+.item .w { font-family: var(--font-read); font-size: 1.15rem; font-weight: 600; }
+.item .ipa, .card .ipa { font-family: var(--font-ipa); color: var(--muted); font-size: .9rem; }
+.item .pos { font-size: .75rem; color: var(--accent); margin-left: 6px; }
+.item .mean { margin-top: 2px; }
+.item .ex { font-family: var(--font-read); font-style: italic; color: var(--muted); font-size: .95rem; }
+.item .acts { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+.item.known .w::after { content: "Đã thuộc"; font-family: var(--font-ui); font-size: .7rem; font-weight: 600; color: var(--known); background: var(--known-soft); padding: 1px 6px; border-radius: 10px; margin-left: 8px; vertical-align: middle; }
+.formula { font-family: var(--font-ui); font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 2px 8px; border-radius: 6px; display: inline-block; margin: 4px 0; font-size: .9rem; overflow-wrap: anywhere; }
+.quote { font-family: var(--font-read); border-left: 2px solid var(--accent); padding-left: 10px; margin: 6px 0; }
+.pg { font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Thẻ ghi nhớ */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px 22px; min-height: 260px; display: grid; align-content: center; gap: 10px; text-align: center; cursor: pointer; box-shadow: 0 1px 2px rgba(15, 30, 45, .06); }
+.card .big { font-family: var(--font-read); font-size: 1.9rem; font-weight: 600; overflow-wrap: anywhere; }
+.card .hint { font-size: .8rem; color: var(--muted); }
+.card .back { display: grid; gap: 8px; border-top: 1px dashed var(--line); padding-top: 12px; }
+.card .ex { font-family: var(--font-read); font-style: italic; color: var(--muted); }
+.card-nav { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
+.empty { padding: 32px 0; color: var(--muted); text-align: center; }
+@media (prefers-reduced-motion: no-preference) { .card { transition: border-color .15s; } }
+.card:hover { border-color: var(--accent); }
+</style>
+
+<header>
+  <div class="wrap">
+    <div class="book"><h1 id="bookTitle">Sổ tay đọc sách</h1><span class="orig" id="bookOrig"></span><select id="bookSel" aria-label="Chọn sách" hidden></select></div>
+    <nav class="tabs" aria-label="Mục">
+      <a href="#ban-dich" data-tab="ban-dich">Bản dịch<span class="n" id="nPages">0</span></a>
+      <a href="#tu-vung" data-tab="tu-vung">Từ vựng<span class="n" id="nVocab">0</span></a>
+      <a href="#mau-cau" data-tab="mau-cau">Mẫu câu<span class="n" id="nPat">0</span></a>
+    </nav>
+  </div>
+</header>
+<main><div class="wrap" id="view"></div></main>
+
+<script>
+const BOOKS = [{"id": "the-gioi-2050", "title": "Thế giới 2050", "original": "The World in 2050", "author": "Laurence C. Smith", "lang": "en", "pages": [{"n": 1, "date": "2026-10-28", "source": ["...winter. The name was popularized in a book by Fiona Hill and Clifford Gaddy of the Brookings Institution, but the concept is as ancient as life itself. When it arrives, the birds depart, the ground cracks, frogs freeze solid in their mud beds. At the extreme end, if temperatures plunge to -40°F (or -40°C, the Fahrenheit and Celsius temperature scales converge at this number) steel breaks, engines fail, and manual work becomes virtually impossible. Human enterprise grinds to a halt.", "Regardless of country, all NORC northerners seem to..."], "translation": ["...mùa đông. Cái tên này trở nên phổ biến nhờ một cuốn sách của Fiona Hill và Clifford Gaddy thuộc Viện Brookings, nhưng bản thân khái niệm này thì cổ xưa như chính sự sống. Khi nó đến, chim chóc bay đi, mặt đất nứt nẻ, ếch đông cứng trong những ổ bùn của chúng. Ở mức khắc nghiệt nhất, nếu nhiệt độ tụt xuống -40°F (hay -40°C, vì thang nhiệt độ Fahrenheit và Celsius trùng nhau đúng ở con số này), thép gãy vỡ, động cơ chết máy, và lao động chân tay gần như không thể thực hiện được. Mọi hoạt động của con người đều đình trệ.", "Bất kể ở quốc gia nào, tất cả người dân miền bắc thuộc các nước NORC dường như..."], "note": "NORC (Northern Rim Countries): các nước vành đai phương Bắc gồm Mỹ, Canada, Iceland, Greenland, Na Uy, Thụy Điển, Phần Lan, Nga.", "vocab": [{"w": "popularize", "ipa": "/ˈpɒpjələraɪz/", "pos": "v", "mean": "làm cho phổ biến, phổ cập", "ex": "The idea was popularized by a TV series."}, {"w": "concept", "ipa": "/ˈkɒnsept/", "pos": "n", "mean": "khái niệm", "ex": "The concept of time is hard to explain."}, {"w": "ancient", "ipa": "/ˈeɪnʃənt/", "pos": "adj", "mean": "cổ xưa, lâu đời", "ex": "an ancient tradition"}, {"w": "depart", "ipa": "/dɪˈpɑːt/", "pos": "v", "mean": "rời đi (trang trọng hơn leave)", "ex": "The train departs at 9 a.m."}, {"w": "freeze solid", "ipa": "/friːz ˈsɒlɪd/", "pos": "v phr", "mean": "đông cứng hoàn toàn", "ex": "The lake froze solid overnight."}, {"w": "mud bed", "ipa": "/mʌd bed/", "pos": "n", "mean": "ổ bùn, lớp bùn (nơi ếch ngủ đông)", "ex": "Frogs hibernate in mud beds."}, {"w": "at the extreme end", "ipa": "/ɪkˈstriːm/", "pos": "phr", "mean": "ở mức cực đoan nhất, ở thái cực", "ex": "At the extreme end, some people work 80 hours a week."}, {"w": "plunge", "ipa": "/plʌndʒ/", "pos": "v", "mean": "tụt mạnh, lao xuống đột ngột", "ex": "Prices plunged by 30%."}, {"w": "converge", "ipa": "/kənˈvɜːdʒ/", "pos": "v", "mean": "hội tụ, gặp nhau tại một điểm", "ex": "The two roads converge near the river."}, {"w": "temperature scale", "ipa": "/ˈtemprətʃə skeɪl/", "pos": "n", "mean": "thang đo nhiệt độ", "ex": "the Celsius temperature scale"}, {"w": "manual work", "ipa": "/ˈmænjuəl wɜːk/", "pos": "n", "mean": "lao động chân tay", "ex": "Manual work is tiring in hot weather."}, {"w": "virtually", "ipa": "/ˈvɜːtʃuəli/", "pos": "adv", "mean": "gần như, hầu như (= almost)", "ex": "It's virtually impossible to finish today."}, {"w": "enterprise", "ipa": "/ˈentəpraɪz/", "pos": "n", "mean": "hoạt động, công cuộc (ở đây không phải \"doanh nghiệp\")", "ex": "Human enterprise depends on cheap energy."}, {"w": "grind to a halt", "ipa": "/ɡraɪnd tu ə hɔːlt/", "pos": "idiom", "mean": "dần dần ngừng hẳn, đình trệ", "ex": "Traffic ground to a halt after the accident."}, {"w": "regardless of", "ipa": "/rɪˈɡɑːdləs əv/", "pos": "prep", "mean": "bất kể, không phân biệt", "ex": "Everyone is welcome regardless of age."}, {"w": "northerner", "ipa": "/ˈnɔːðənə/", "pos": "n", "mean": "người miền bắc", "ex": "Northerners are used to long winters."}], "patterns": [{"name": "Bị động có \"by\"", "formula": "S + was/were + V3 + (in N) + by + người", "src": "The name was popularized in a book by Fiona Hill and Clifford Gaddy.", "explain": "Nhấn mạnh sự việc thay vì người làm. Ở đây \"by\" đi với \"a book\" (sách của ai), không đi với động từ.", "ex": "The theory was made famous in a lecture by Einstein.", "exVi": "Lý thuyết này trở nên nổi tiếng qua một bài giảng của Einstein."}, {"name": "So sánh bằng + \"itself\"", "formula": "as + adj + as + N + itself", "src": "The concept is as ancient as life itself.", "explain": "\"itself\" đứng sau danh từ để nhấn mạnh: \"chính\" cái đó, tức là ở mức tối đa.", "ex": "This problem is as old as the city itself.", "exVi": "Vấn đề này cũ như chính thành phố này."}, {"name": "Câu điều kiện loại 0", "formula": "If + hiện tại đơn, hiện tại đơn", "src": "If temperatures plunge to -40°F, steel breaks, engines fail.", "explain": "Dùng cho quy luật tự nhiên, sự thật luôn đúng; cả hai vế đều chia hiện tại đơn, không dùng \"will\".", "ex": "If you heat ice, it melts.", "exVi": "Nếu bạn làm nóng băng, nó tan chảy."}, {"name": "Liệt kê không dùng \"and\"", "formula": "Clause, clause, clause.", "src": "When it arrives, the birds depart, the ground cracks, frogs freeze solid in their mud beds.", "explain": "Các mệnh đề ngắn nối bằng dấu phẩy, tạo nhịp nhanh và gây ấn tượng. Hợp văn miêu tả; không nên lạm dụng trong IELTS Writing.", "ex": "The bell rings, the doors open, the children run out.", "exVi": "Chuông reo, cửa mở, lũ trẻ chạy ùa ra."}, {"name": "regardless of / seem to", "formula": "Regardless of + N/V-ing, S + seem(s) to + V", "src": "Regardless of country, all NORC northerners seem to...", "explain": "\"regardless of\" = bất kể; \"seem to + V nguyên mẫu\" = dường như.", "ex": "Regardless of the weather, she seems to enjoy running every morning.", "exVi": "Bất kể thời tiết thế nào, cô ấy dường như vẫn thích chạy bộ mỗi sáng."}]}]}];
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+const state = { book: store.get("book", BOOKS[0] && BOOKS[0].id), mode: { "tu-vung": "list", "mau-cau": "list" }, filter: "all", q: "", deck: null, idx: 0, flipped: false, showSrc: false };
+const known = new Set(store.get("known", []));
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pad = n => String(n).padStart(3, "0");
+const book = () => BOOKS.find(b => b.id === state.book) || BOOKS[0];
+const tab = () => ["ban-dich", "tu-vung", "mau-cau"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "ban-dich";
+
+function items(kind) {
+  const b = book(); if (!b) return [];
+  const out = [], seen = new Set();
+  for (const p of b.pages) for (const it of (kind === "tu-vung" ? p.vocab : p.patterns) || []) {
+    const key = b.id + "|" + kind + "|" + (it.w || it.name);
+    if (seen.has(key)) continue; seen.add(key);
+    out.push({ ...it, page: p.n, key });
+  }
+  return out;
+}
+function filtered(kind) {
+  const q = state.q.trim().toLowerCase();
+  return items(kind).filter(it => (state.filter === "all" || !known.has(it.key)) &&
+    (!q || JSON.stringify(it).toLowerCase().includes(q)));
+}
+function toggleKnown(key, v) { v ? known.add(key) : known.delete(key); store.set("known", [...known]); }
+function speak(text) {
+  try { const b = book(); const u = new SpeechSynthesisUtterance(text); u.lang = b.lang === "zh" ? "zh-CN" : "en-GB"; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) {}
+}
+
+function renderHeader() {
+  const b = book();
+  document.getElementById("bookTitle").textContent = b ? b.title : "Sổ tay đọc sách";
+  document.getElementById("bookOrig").textContent = b ? [b.original, b.author].filter(Boolean).join(" · ") : "";
+  const sel = document.getElementById("bookSel");
+  sel.hidden = BOOKS.length < 2;
+  sel.innerHTML = BOOKS.map(x => `<option value="${esc(x.id)}"${x.id === state.book ? " selected" : ""}>${esc(x.title)}</option>`).join("");
+  document.getElementById("nPages").textContent = b ? b.pages.length : 0;
+  document.getElementById("nVocab").textContent = items("tu-vung").length;
+  document.getElementById("nPat").textContent = items("mau-cau").length;
+  document.querySelectorAll("nav.tabs a").forEach(a => a.dataset.tab === tab() ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
+}
+
+function renderReading() {
+  const b = book();
+  if (!b || !b.pages.length) return `<p class="empty">Chưa có trang nào. Dán một trang sách cho Claude để bắt đầu.</p>`;
+  return `<div class="toolbar"><button id="srcBtn" aria-pressed="${state.showSrc}">${state.showSrc ? "Ẩn bản gốc" : "Hiện bản gốc"}</button><span class="stat">${b.pages.length} trang đã dịch</span></div>` +
+    b.pages.map(p => `<article class="page"><div class="page-head"><span class="label">Trang ${pad(p.n)}</span><span class="pg">${esc(p.date || "")}</span></div>
+      ${state.showSrc ? `<div class="src">${(p.source || []).map(t => `<p lang="${esc(b.lang)}">${esc(t)}</p>`).join("")}</div>` : ""}
+      ${(p.translation || []).map(t => `<p>${esc(t)}</p>`).join("")}
+      ${p.note ? `<p class="note">${esc(p.note)}</p>` : ""}</article>`).join("");
+}
+
+function toolbar(kind) {
+  const all = items(kind), k = all.filter(i => known.has(i.key)).length, m = state.mode[kind];
+  return `<div class="toolbar">
+    <span class="seg" role="group" aria-label="Chế độ"><button data-mode="list" aria-pressed="${m === "list"}">Danh sách</button><button data-mode="cards" aria-pressed="${m === "cards"}">Thẻ ghi nhớ</button></span>
+    <span class="seg" role="group" aria-label="Lọc"><button data-filter="all" aria-pressed="${state.filter === "all"}">Tất cả</button><button data-filter="todo" aria-pressed="${state.filter === "todo"}">Chưa thuộc</button></span>
+    ${m === "list" ? `<input type="search" id="q" placeholder="Tìm…" value="${esc(state.q)}" aria-label="Tìm">` : ""}
+    <span class="stat">Đã thuộc ${k}/${all.length}</span></div>`;
+}
+
+function vocabRow(it) {
+  return `<div class="item${known.has(it.key) ? " known" : ""}"><div>
+    <div><span class="w" lang="${esc(book().lang)}">${esc(it.w)}</span><span class="pos">${esc(it.pos)}</span></div>
+    <div class="ipa">${esc(it.ipa)}</div><div class="mean">${esc(it.mean)}</div>
+    <div class="ex" lang="${esc(book().lang)}">${esc(it.ex)}</div><div class="pg">Trang ${pad(it.page)}</div></div>
+    <div class="acts"><button data-say="${esc(it.w)}">Nghe</button><button data-known="${esc(it.key)}">${known.has(it.key) ? "Bỏ đánh dấu" : "Đã thuộc"}</button></div></div>`;
+}
+function patRow(it) {
+  return `<div class="item${known.has(it.key) ? " known" : ""}"><div>
+    <div class="w">${esc(it.name)}</div><div class="formula">${esc(it.formula)}</div>
+    <div class="quote" lang="${esc(book().lang)}">${esc(it.src)}</div><div class="mean">${esc(it.explain)}</div>
+    <div class="ex" lang="${esc(book().lang)}">${esc(it.ex)}</div><div class="mean">${esc(it.exVi)}</div><div class="pg">Trang ${pad(it.page)}</div></div>
+    <div class="acts"><button data-say="${esc(it.ex)}">Nghe</button><button data-known="${esc(it.key)}">${known.has(it.key) ? "Bỏ đánh dấu" : "Đã thuộc"}</button></div></div>`;
+}
+
+function renderStudy(kind) {
+  const list = filtered(kind);
+  let body;
+  if (!list.length) body = `<p class="empty">${items(kind).length ? "Bạn đã thuộc hết mục này. Chọn “Tất cả” để ôn lại." : "Chưa có mục nào."}</p>`;
+  else if (state.mode[kind] === "list") body = `<div class="items">${list.map(kind === "tu-vung" ? vocabRow : patRow).join("")}</div>`;
+  else {
+    if (!state.deck || state.deck.kind !== kind) state.deck = { kind, keys: list.map(i => i.key) }, state.idx = 0;
+    const deck = state.deck.keys.map(k => list.find(i => i.key === k)).filter(Boolean);
+    if (state.idx >= deck.length) state.idx = 0;
+    const it = deck[state.idx], L = esc(book().lang);
+    const front = kind === "tu-vung"
+      ? `<div class="big" lang="${L}">${esc(it.w)}</div><div class="ipa">${esc(it.ipa)} · ${esc(it.pos)}</div>`
+      : `<div class="label">Dịch sang ${book().lang === "zh" ? "tiếng Trung" : "tiếng Anh"} theo mẫu “${esc(it.name)}”</div><div class="big" style="font-size:1.35rem">${esc(it.exVi)}</div>`;
+    const back = kind === "tu-vung"
+      ? `<div style="font-size:1.15rem">${esc(it.mean)}</div><div class="ex" lang="${L}">${esc(it.ex)}</div>`
+      : `<div class="formula">${esc(it.formula)}</div><div class="ex" lang="${L}" style="font-size:1.1rem">${esc(it.ex)}</div><div>${esc(it.explain)}</div><div class="quote" lang="${L}" style="text-align:left">${esc(it.src)}</div>`;
+    body = `<div class="card" id="card" role="button" tabindex="0" aria-label="Lật thẻ">${front}
+      ${state.flipped ? `<div class="back">${back}</div>` : `<div class="hint">Bấm vào thẻ để xem đáp án</div>`}</div>
+      <div class="card-nav"><span class="stat" style="align-self:center">${state.idx + 1}/${deck.length} · trang ${pad(it.page)}</span>
+      <button data-say="${esc(kind === "tu-vung" ? it.w : it.ex)}">Nghe</button><button id="shuffle">Xáo trộn</button>
+      <button id="again">Chưa thuộc</button><button class="good" data-known-next="${esc(it.key)}">Đã thuộc</button></div>`;
+  }
+  return toolbar(kind) + body;
+}
+
+function render() {
+  renderHeader();
+  const t = tab(), v = document.getElementById("view");
+  v.innerHTML = t === "ban-dich" ? renderReading() : renderStudy(t);
+  const q = document.getElementById("q");
+  if (q) q.oninput = () => { state.q = q.value; const pos = q.selectionStart; render(); const n = document.getElementById("q"); n.focus(); n.setSelectionRange(pos, pos); };
+}
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("button, #card"); if (!b) return;
+  const t = tab();
+  if (b.id === "srcBtn") state.showSrc = !state.showSrc;
+  else if (b.dataset.mode) { state.mode[t] = b.dataset.mode; state.deck = null; state.flipped = false; }
+  else if (b.dataset.filter) { state.filter = b.dataset.filter; state.deck = null; state.flipped = false; }
+  else if (b.dataset.say) return speak(b.dataset.say);
+  else if (b.dataset.known) toggleKnown(b.dataset.known, !known.has(b.dataset.known));
+  else if (b.dataset.knownNext) { toggleKnown(b.dataset.knownNext, true); state.flipped = false; if (state.filter === "all") state.idx++; }
+  else if (b.id === "again") { state.idx++; state.flipped = false; }
+  else if (b.id === "shuffle") { const k = state.deck.keys; for (let i = k.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [k[i], k[j]] = [k[j], k[i]]; } state.idx = 0; state.flipped = false; }
+  else if (b.id === "card") state.flipped = !state.flipped;
+  render();
+});
+document.addEventListener("keydown", e => { if (e.target.id === "card" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); state.flipped = !state.flipped; render(); } });
+document.getElementById("bookSel").onchange = e => { state.book = e.target.value; store.set("book", state.book); state.deck = null; render(); };
+addEventListener("hashchange", () => { state.flipped = false; render(); window.scrollTo(0, 0); });
+render();
+</script>

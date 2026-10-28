@@ -295,7 +295,8 @@ function renderAdd() {
   if (!sample || !db) return `<p class="empty">Phần thêm trang cần mở trang này trên claude.ai khi đã đăng nhập. Đang kết nối…</p>`;
   if (!isOwner) return `<p class="empty">Chỉ chủ sổ tay mới thêm được trang mới.</p>`;
   const b = book(), next = b ? (b.pages.length ? b.pages[b.pages.length - 1].n + 1 : 1) : 1;
-  const r = state.result;
+  const r = state.result || (state.book !== "__new" && b && b.pages[b.pages.length - 1]);
+  const vocab = items("tu-vung"), L = esc(b ? b.lang : "en"), src = (r && r.source) || [], vi = (r && r.translation) || [];
   return `<div class="add">
     <div class="field"><label class="label" for="bookPick">Sách</label>
       <div class="row"><select id="bookPick">${BOOKS.map(x => `<option value="${esc(x.id)}"${x.id === state.book ? " selected" : ""}>${esc(x.title)}</option>`).join("")}<option value="__new"${state.book === "__new" ? " selected" : ""}>+ Sách mới…</option></select>
@@ -311,11 +312,15 @@ function renderAdd() {
     <div class="row"><button class="primary" id="go"${state.busy ? " disabled" : ""}>${state.busy ? "Đang dịch…" : "Dịch và lưu trang"}</button>${state.busy ? `<button id="stop">Dừng</button>` : ""}
       <span class="help">Mất khoảng 30–90 giây. Lần đầu Claude sẽ hỏi bạn cho phép.</span></div>
     ${state.msg ? `<div class="status${state.err ? " err" : ""}" id="status">${esc(state.msg)}</div>` : ""}
-    ${r ? `<div class="result"><span class="label">Đã lưu · Trang ${pad(r.n)}</span>
-      ${r.translation.map(t => `<p style="font-family:var(--font-read)">${esc(t)}</p>`).join("")}
-      <h3>Từ vựng (${r.vocab.length})</h3>${r.vocab.map(v => `<div><b lang="${esc(r.lang)}">${esc(v.w)}</b> <span class="ipa">${esc(v.ipa)}</span> — ${esc(v.mean)}</div>`).join("")}
-      <h3>Mẫu câu (${r.patterns.length})</h3>${r.patterns.map(x => `<div><b>${esc(x.name)}</b>: <span class="formula">${esc(x.formula)}</span></div>`).join("")}
-      <p class="help">Xem đầy đủ ở tab Bản dịch, Từ vựng, Mẫu câu.</p></div>` : ""}
+    ${r ? `<article class="result page"><div class="page-head"><span class="label">${state.result ? "Đã lưu" : "Trang mới nhất"} · Trang ${pad(r.n)}${r.label ? ` · trang sách ${esc(r.label)}` : ""}</span><span class="pg">Bấm vào từ tô màu để xem nghĩa</span></div>
+      ${Array.from({ length: Math.max(src.length, vi.length) }, (_, i) => `
+        ${src[i] ? `<div class="src"><p lang="${L}">${markNew(src[i], vocab, b.lang)}</p></div>` : ""}
+        ${vi[i] ? `<p>${esc(vi[i])}</p>` : ""}`).join("")}
+      ${r.note ? `<p class="note">${esc(r.note)}</p>` : ""}
+      <h3>Từ vựng (${(r.vocab || []).length})</h3>${(r.vocab || []).map(v => { const k = b.id + "|tu-vung|" + v.w; return `<div><span class="${known.has(k) ? "" : "nw"}" role="button" tabindex="0" data-vk="${esc(k)}" lang="${L}"><b>${esc(v.w)}</b></span> <span class="ipa">${esc(v.ipa)}</span> — ${esc(v.mean)}</div>`; }).join("")}
+      <h3>Mẫu câu (${(r.patterns || []).length})</h3>${(r.patterns || []).map(x => `<div style="margin-bottom:8px"><b>${esc(x.name)}</b>: <span class="formula">${esc(x.formula)}</span><div class="quote" lang="${L}">${esc(x.src)}</div><div class="help">${esc(x.explain)}</div></div>`).join("")}
+      ${(r.hard || []).length ? `<details class="hard"><summary>Phân tích câu khó (${r.hard.length})</summary><ul>${r.hard.map(h => `<li><div class="quote" lang="${L}">${esc(h.s)}</div><div>${esc(h.parts)}</div><div class="pg">${esc(h.mean)}</div></li>`).join("")}</ul></details>` : ""}
+    </article>` : ""}
   </div>`;
 }
 
@@ -375,7 +380,7 @@ function render() {
   BOOKS = allBooks();
   renderHeader();
   const t = tab(), v = document.getElementById("view");
-  v.innerHTML = (t === "ban-dich" ? renderReading() + renderSheet() : t === "them-trang" ? renderAdd() : renderStudy(t));
+  v.innerHTML = (t === "ban-dich" ? renderReading() + renderSheet() : t === "them-trang" ? renderAdd() + renderSheet() : renderStudy(t));
   const d = document.getElementById("draft");
   if (d) d.oninput = () => { state.draft = d.value; store.set("draft", d.value); };
   if (d && state.pasteHint) d.focus();
@@ -390,7 +395,7 @@ function render() {
 }
 
 document.addEventListener("click", e => {
-  const b = e.target.closest("button, #card, .nw"); if (!b) return;
+  const b = e.target.closest("button, #card, [data-vk]"); if (!b) return;
   const t = tab();
   if (b.id === "go") return translate();
   if (b.id === "pasteBtn") { state.pasteHint = true; return render(); }

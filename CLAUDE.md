@@ -38,3 +38,7 @@ Không xoá document trong db trừ khi người dùng yêu cầu (trang trong r
 Mỗi cuốn có thư mục riêng `sach/<ten-sach-khong-dau>/` (cùng tên với `slug` của tên sách trong phần mềm: bỏ dấu, chữ thường, gạch ngang) và id `book` trong db trùng tên thư mục.
 Số trang, từ vựng, mẫu câu, dấu "đã nhớ" và vị trí đọc Kindle đều tính riêng cho từng cuốn. Khi đồng bộ, trang nào thuộc `book` nào thì chép vào thư mục sách đó,
 tạo `du-lieu.json` mới cho sách chưa có (id, title, original, author, lang, pages) và thêm dòng vào `sach/README.md`.
+
+## Ý nghĩa sâu xa (trường `insight`)
+Mỗi trang có thêm trường `insight`: 4–7 câu tiếng Việt giải thích ý chính, bối cảnh và điều đáng suy ngẫm của trang (chuỗi rỗng nếu không có gì sâu xa hơn nghĩa bề mặt; `insightDone: true` khi đã thử).
+Phần mềm tự tạo sau từ vựng; khi trả lời trong chat cũng thêm mục "Ý nghĩa sâu xa" ở cuối, và lưu vào `trang-NNN.md` và `du-lieu.json`.

@@ -132,6 +132,7 @@ input[type="search"] { font: inherit; font-size: .88rem; padding: 6px 10px; bord
 .add .help { font-size: .85rem; color: var(--muted); }
 .thumb { max-height: 160px; border: 1px solid var(--line); border-radius: 8px; }
 .status { padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--ink); font-size: .9rem; white-space: pre-wrap; }
+.insight p { font-family: var(--font-read); font-size: 1.05em; line-height: 1.7; margin: 0 0 .8em; max-width: 65ch; border-left: 2px solid var(--accent); padding-left: 12px; }
 .status.warn { background: var(--new-soft); border: 1px solid var(--new); }
 .status.err { background: var(--surface); border: 1px solid var(--line); }
 details.hard { margin-top: 6px; }
@@ -307,6 +308,7 @@ function renderReading() {
       ${vw !== "src" ? (p.translation || []).map(t => `<p>${markVi(t, viTerms(p))}</p>`).join("") : ""}
       ${p.note ? `<p class="note">${esc(p.note)}</p>` : ""}
       ${(p.hard || []).length ? `<details class="hard"><summary>Phân tích câu khó (${p.hard.length})</summary><ul>${p.hard.map(h => `<li><div class="quote" lang="${esc(b.lang)}">${esc(h.s)}</div><div>${esc(h.parts)}</div><div class="pg">${esc(h.mean)}</div></li>`).join("")}</ul></details>` : ""}
+      ${p.insight ? `<details class="hard"><summary>Ý nghĩa sâu xa</summary><div class="insight">${insightHTML(p.insight)}</div></details>` : p.dbId && isOwner && !p.insightDone && (p.vocab || []).length ? `<button class="danger" data-explain="${esc(p.dbId)}">Giải thích ý nghĩa sâu xa</button>` : ""}
       ${p.dbId && isOwner ? `<button class="danger" data-del="${esc(p.dbId)}">${state.confirmDel === p.dbId ? "Bấm lần nữa để xoá trang này" : "Xoá trang"}</button>` : ""}</article>`).join("");
 }
 
@@ -403,6 +405,7 @@ function renderAdd() {
       <h3>Từ vựng (${(r.vocab || []).length})</h3>${(r.vocab || []).map(v => { const k = b.id + "|tu-vung|" + v.w; return `<div><span class="${known.has(k) ? "" : "nw"}" role="button" tabindex="0" data-vk="${esc(k)}" lang="${L}"><b>${esc(v.w)}</b></span> <span class="ipa">${esc(v.ipa)}</span> — ${esc(v.mean)}</div>`; }).join("")}
       <h3>Mẫu câu (${(r.patterns || []).length})</h3>${(r.patterns || []).map(x => `<div style="margin-bottom:8px"><b>${esc(x.name)}</b>: <span class="formula">${esc(x.formula)}</span><div class="quote" lang="${L}">${esc(x.src)}</div><div class="help">${esc(x.explain)}</div></div>`).join("")}
       ${(r.hard || []).length ? `<details class="hard"><summary>Phân tích câu khó (${r.hard.length})</summary><ul>${r.hard.map(h => `<li><div class="quote" lang="${L}">${esc(h.s)}</div><div>${esc(h.parts)}</div><div class="pg">${esc(h.mean)}</div></li>`).join("")}</ul></details>` : ""}
+      ${r.insight ? `<h3>Ý nghĩa sâu xa</h3><div class="insight">${insightHTML(r.insight)}</div>` : (r.vocab || []).length && !r.insightDone && !state.busy && (state.result || r.dbId) ? `<p><button class="primary" id="retryInsight">Giải thích ý nghĩa sâu xa</button></p>` : ""}
     </article>` : ""}
     ${renderBookAdmin()}
   </div>`;
@@ -439,6 +442,38 @@ Trả về DUY NHẤT một đối tượng JSON, không thêm chữ nào khác:
 Quy tắc: vocab 8–12 mục, CHỈ từ vượt trình độ trên (tiếng Anh: trên B2, thành ngữ, cụm động từ, từ học thuật; tiếng Trung: HSK5 trở lên, 成语, 书面语). patterns 2–4 mục. hard 1–2 câu. Giữ mỗi trường ngắn gọn.`;
 }
 
+// Bước 3: giải thích ý nghĩa sâu xa bằng tiếng Việt (cuộc gọi nhỏ riêng để không làm câu trả lời bước 2 dài thêm).
+function buildInsightPrompt(page) {
+  return `Bạn là người đồng hành đọc sách cho một người Việt đang học ngoại ngữ.
+Sách "${page.bookTitle}". Dưới đây là một trang (bản gốc và bản dịch tiếng Việt).
+Bản gốc:
+"""${page.source.join("\n")}"""
+Bản dịch tiếng Việt:
+"""${page.translation.join("\n")}"""
+
+Hãy viết phần giải thích ý nghĩa sâu xa bằng tiếng Việt, 4–7 câu, chia thành 1–3 đoạn ngắn, gồm những gì có thật sự giúp hiểu trang này:
+- ý chính tác giả muốn nói và lập luận đằng sau;
+- bối cảnh, kiến thức nền nên biết (khoa học, lịch sử, địa lý, thuật ngữ, ẩn ý, cách chơi chữ hay giọng điệu);
+- điều đáng suy ngẫm, hoặc mối liên hệ với chủ đề chung của cuốn sách.
+Diễn đạt bằng lời của bạn, không chép lại dài đoạn văn gốc. Chỉ nêu điều bạn chắc chắn. Nếu trang không có gì sâu xa hơn nghĩa bề mặt thì trả về chuỗi rỗng.
+Trả về DUY NHẤT một đối tượng JSON: {"insight":"..."} (xuống đoạn bằng \\n\\n).`;
+}
+
+async function explain(page, quiet) {
+  if (!sample || !db || state.busy || !page) return;
+  state.busy = true; state.err = false; state.msg = "Claude đang viết phần ý nghĩa sâu xa…"; state.ctl = new AbortController(); render();
+  try {
+    const out = await sample.json(buildInsightPrompt(page), { signal: state.ctl.signal, modelTier: "default" });
+    const insight = String((out && out.insight) || "").trim();
+    await db.collection("pages").doc(`${page.book}-${pad(page.n)}`).update({ insight, insightDone: true });
+    Object.assign(page, { insight, insightDone: true });
+    state.msg = "";
+  } catch (e) {
+    state.err = true; state.msg = quiet ? `Phần ý nghĩa sâu xa chưa tạo được: ${errVi(e)} Bấm "Giải thích ý nghĩa sâu xa" để thử lại.` : errVi(e);
+  } finally { state.busy = false; render(); }
+}
+const insightHTML = t => String(t || "").split(/(?:\n|\\n)+/).filter(x => x.trim()).map(x => `<p>${esc(x)}</p>`).join("");
+
 const ERR_VI = { cancelled: "Đã dừng.", not_granted: "Bạn chưa cho phép trang dùng Claude. Tải lại trang và chọn Cho phép.",
   rate_limited: "Claude đang bận, đợi một lúc rồi thử lại.", invalid_json: "Claude trả lời sai định dạng.",
   prompt_too_large: "Trang quá dài. Hãy chia làm hai lần dán.", image_rejected: "Ảnh không đọc được. Hãy thử ảnh khác hoặc dán chữ." };
@@ -453,6 +488,8 @@ async function analyze(page) {
     await db.collection("pages").doc(`${page.book}-${pad(page.n)}`).update(fields);
     Object.assign(page, fields);
     state.msg = "";
+    state.busy = false; render();
+    return explain(page, true);
   } catch (e) {
     state.err = true;
     state.msg = `Đã lưu bản dịch. Phần từ vựng và mẫu câu chưa tạo được: ${errVi(e)} Bấm "Tạo từ vựng và mẫu câu" để thử lại.`;
@@ -656,6 +693,8 @@ document.addEventListener("click", e => {
     return translate(true);
   }
   if (b.dataset.viewpage) { state.scrollTo = "p-" + b.dataset.viewpage; if (location.hash === "#ban-dich") return render(); location.hash = "#ban-dich"; return; }
+  if (b.id === "retryInsight") { const bk = book(); return explain(state.result || (bk && bk.pages[bk.pages.length - 1])); }
+  if (b.dataset.explain) return explain(dbPages.find(p => p.dbId === b.dataset.explain));
   if (b.id === "retryAnalyze") { const bk = book(); return analyze(state.result || (bk && bk.pages[bk.pages.length - 1])); }
   if (b.id === "fsUp" || b.id === "fsDown") { rs = Math.round(Math.max(0.8, Math.min(1.8, rs + (b.id === "fsUp" ? 0.1 : -0.1))) * 10) / 10; store.set("rs", rs); return applyRs(); }
   if (b.id === "openReader") return openReader();

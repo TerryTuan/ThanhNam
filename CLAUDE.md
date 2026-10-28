@@ -33,3 +33,8 @@ và lưu vào cơ sở dữ liệu của artifact (collection `pages`, id `<ten-
 Khi người dùng nhắc "đồng bộ", hoặc trước khi lưu một trang mới qua chat: đọc collection `pages` bằng ArtifactData,
 chép các trang chưa có vào repo (trang-NNN.md, ban-dich-tieng-viet.md, tu-vung.md, mau-cau.md, du-lieu.json), build lại, xuất bản lại rồi commit.
 Không xoá document trong db trừ khi người dùng yêu cầu (trang trong repo luôn được ưu tiên khi trùng số thứ tự).
+
+## Nhiều cuốn sách
+Mỗi cuốn có thư mục riêng `sach/<ten-sach-khong-dau>/` (cùng tên với `slug` của tên sách trong phần mềm: bỏ dấu, chữ thường, gạch ngang) và id `book` trong db trùng tên thư mục.
+Số trang, từ vựng, mẫu câu, dấu "đã nhớ" và vị trí đọc Kindle đều tính riêng cho từng cuốn. Khi đồng bộ, trang nào thuộc `book` nào thì chép vào thư mục sách đó,
+tạo `du-lieu.json` mới cho sách chưa có (id, title, original, author, lang, pages) và thêm dòng vào `sach/README.md`.

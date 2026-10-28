@@ -169,7 +169,7 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 };
-const state = { draft: store.get("draft", ""), pageLabel: "", file: null, busy: false, msg: "", err: false, result: null, newTitle: "", confirmDel: null, book: store.get("book", REPO_BOOKS[0] && REPO_BOOKS[0].id), mode: { "tu-vung": "list", "mau-cau": "list" }, filter: "all", q: "", deck: null, idx: 0, flipped: false, rdOpen: false, rdLang: store.get("rdLang", "vi"), rdSize: store.get("rdSize", 19), rdPage: 0, rdPages: 1, autoGo: store.get("autoGo", true), pasteHint: false, view: store.get("view", "both"), pop: null };
+const state = { draft: store.get("draft", ""), pageLabel: "", file: null, busy: false, msg: "", err: false, result: null, newTitle: "", newOrig: "", newAuthor: "", confirmDel: null, book: store.get("book", REPO_BOOKS[0] && REPO_BOOKS[0].id), mode: { "tu-vung": "list", "mau-cau": "list" }, filter: "all", q: "", deck: null, idx: 0, flipped: false, rdOpen: false, rdLang: store.get("rdLang", "vi"), rdSize: store.get("rdSize", 19), rdPage: 0, rdPages: 1, autoGo: store.get("autoGo", true), pasteHint: false, view: store.get("view", "both"), pop: null };
 const known = new Set(store.get("known", []));
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const pad = n => String(n).padStart(3, "0");
@@ -178,7 +178,7 @@ function allBooks() {
   const list = REPO_BOOKS.map(b => ({ ...b, pages: [...b.pages] }));
   for (const p of dbPages) {
     let b = list.find(x => x.id === p.book);
-    if (!b) list.push(b = { id: p.book, title: p.bookTitle || p.book, original: p.bookOriginal || "", author: "", lang: p.lang || "en", pages: [] });
+    if (!b) list.push(b = { id: p.book, title: p.bookTitle || p.book, original: p.bookOriginal || "", author: p.bookAuthor || "", lang: p.lang || "en", pages: [] });
     if (!b.pages.some(x => x.n === p.n)) b.pages.push(p);
   }
   list.forEach(b => b.pages.sort((a, c) => a.n - c.n));
@@ -210,11 +210,12 @@ function speak(text) {
 
 function renderHeader() {
   const b = book();
-  document.getElementById("bookTitle").textContent = b ? b.title : "Sổ tay đọc sách";
-  document.getElementById("bookOrig").textContent = b ? [b.original, b.author].filter(Boolean).join(" · ") : "";
+  const adding = state.book === "__new";
+  document.getElementById("bookTitle").textContent = adding ? (state.newTitle.trim() || "Sách mới") : b ? b.title : "Sổ tay đọc sách";
+  document.getElementById("bookOrig").textContent = adding ? [state.newOrig, state.newAuthor].map(x => x.trim()).filter(Boolean).join(" · ") : b ? [b.original, b.author].filter(Boolean).join(" · ") : "";
   const sel = document.getElementById("bookSel");
-  sel.hidden = BOOKS.length < 2;
-  sel.innerHTML = BOOKS.map(x => `<option value="${esc(x.id)}"${x.id === state.book ? " selected" : ""}>${esc(x.title)}</option>`).join("");
+  sel.hidden = false;
+  sel.innerHTML = BOOKS.map(x => `<option value="${esc(x.id)}"${x.id === state.book ? " selected" : ""}>${esc(x.title)}</option>`).join("") + `<option value="__new"${adding ? " selected" : ""}>+ Sách mới…</option>`;
   document.getElementById("nPages").textContent = b ? b.pages.length : 0;
   document.getElementById("nVocab").textContent = items("tu-vung").length;
   document.getElementById("nPat").textContent = items("mau-cau").length;
@@ -339,6 +340,16 @@ function renderStudy(kind) {
 
 function slug(s) { return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "sach"; }
 
+// Đổi tên sách: chỉ cho sách tạo trong phần mềm (sách trong repo đổi tên ở du-lieu.json).
+function renderBookAdmin() {
+  const mine = BOOKS.filter(x => !REPO_BOOKS.some(r => r.id === x.id) && dbPages.some(p => p.book === x.id));
+  const rows = BOOKS.map(x => {
+    const editable = mine.includes(x);
+    return `<div class="row" style="margin-bottom:8px"><span style="flex:1 1 160px;min-width:0">${editable ? `<input type="text" data-rnin="${esc(x.id)}" value="${esc(x.title)}" style="width:100%" aria-label="Tên sách">` : `<b>${esc(x.title)}</b>`}<span class="stat"> · ${x.pages.length} trang</span></span>${editable ? `<button data-rename="${esc(x.id)}">Đổi tên</button>` : ""}</div>`;
+  }).join("");
+  return `<details class="hard"><summary>Các cuốn sách của bạn (${BOOKS.length})</summary><div style="margin-top:8px">${rows}</div></details>`;
+}
+
 function renderAdd() {
   if (!sample || !db) return `<p class="empty">Phần thêm trang cần mở trang này trên claude.ai khi đã đăng nhập. Đang kết nối…</p>`;
   if (!isOwner) return `<p class="empty">Chỉ chủ sổ tay mới thêm được trang mới.</p>`;
@@ -348,7 +359,7 @@ function renderAdd() {
   return `<div class="add">
     <div class="field"><label class="label" for="bookPick">Sách</label>
       <div class="row"><select id="bookPick">${BOOKS.map(x => `<option value="${esc(x.id)}"${x.id === state.book ? " selected" : ""}>${esc(x.title)}</option>`).join("")}<option value="__new"${state.book === "__new" ? " selected" : ""}>+ Sách mới…</option></select>
-      ${state.book === "__new" ? `<input type="text" id="newTitle" placeholder="Tên sách mới" value="${esc(state.newTitle)}">` : `<span class="stat">Trang sẽ lưu: ${pad(next)}</span>`}</div></div>
+      ${state.book === "__new" ? `<input type="text" id="newTitle" placeholder="Tên sách (tiếng Việt hoặc tên bạn quen gọi)" value="${esc(state.newTitle)}"><input type="text" id="newOrig" placeholder="Tên gốc, ví dụ The World in 2050 (không bắt buộc)" value="${esc(state.newOrig)}"><input type="text" id="newAuthor" placeholder="Tác giả (không bắt buộc)" value="${esc(state.newAuthor)}">` : `<span class="stat">Trang sẽ lưu: ${pad(next)}</span>`}</div></div>
     <div class="field"><label class="label" for="draft">Nội dung trang (tiếng Anh hoặc tiếng Trung)</label>
       <div class="row"><button class="primary" id="pasteBtn">Dán và dịch</button>${state.draft || state.file ? `<button id="clearDraft">Xoá ô</button>` : ""}
         <label class="help"><input type="checkbox" id="autoGo"${state.autoGo ? " checked" : ""}> Tự dịch ngay khi dán</label></div>
@@ -372,6 +383,7 @@ function renderAdd() {
       <h3>Mẫu câu (${(r.patterns || []).length})</h3>${(r.patterns || []).map(x => `<div style="margin-bottom:8px"><b>${esc(x.name)}</b>: <span class="formula">${esc(x.formula)}</span><div class="quote" lang="${L}">${esc(x.src)}</div><div class="help">${esc(x.explain)}</div></div>`).join("")}
       ${(r.hard || []).length ? `<details class="hard"><summary>Phân tích câu khó (${r.hard.length})</summary><ul>${r.hard.map(h => `<li><div class="quote" lang="${L}">${esc(h.s)}</div><div>${esc(h.parts)}</div><div class="pg">${esc(h.mean)}</div></li>`).join("")}</ul></details>` : ""}
     </article>` : ""}
+    ${renderBookAdmin()}
   </div>`;
 }
 
@@ -445,13 +457,13 @@ function showDup(d, pending) {
 }
 
 async function savePage(b, next, out) {
-  const page = { book: b.id, bookTitle: b.title, bookOriginal: b.original || "", lang: out.lang === "zh" ? "zh" : "en", n: next,
+  const page = { book: b.id, bookTitle: b.title, bookOriginal: b.original || "", bookAuthor: b.author || "", lang: out.lang === "zh" ? "zh" : "en", n: next,
     label: state.pageLabel.trim(), date: new Date().toISOString().slice(0, 10),
     source: (out.source || []).map(String), translation: out.translation.map(String), note: String(out.note || ""),
     vocab: [], patterns: [], hard: [] };
   await db.collection("pages").doc(`${b.id}-${pad(next)}`).set(page);
   state.result = page; state.draft = ""; store.set("draft", ""); state.file = null; state.pageLabel = ""; state.dup = null;
-  state.book = b.id; store.set("book", b.id); state.msg = ""; state.newTitle = "";
+  state.book = b.id; store.set("book", b.id); state.msg = ""; state.newTitle = ""; state.newOrig = ""; state.newAuthor = "";
   state.busy = false; render();
   return analyze(page);
 }
@@ -465,7 +477,8 @@ async function translate(force) {
   if (state.book === "__new") {
     const t = state.newTitle.trim();
     if (!t) { state.msg = "Hãy nhập tên sách mới."; state.err = true; return render(); }
-    b = { id: slug(t), title: t, original: "", lang: "en", pages: BOOKS.find(x => x.id === slug(t))?.pages || [] };
+    const same = BOOKS.find(x => x.id === slug(t));
+    b = same || { id: slug(t), title: t, original: state.newOrig.trim(), author: state.newAuthor.trim(), lang: "en", pages: [] };
   }
   const next = b.pages.length ? b.pages[b.pages.length - 1].n + 1 : 1;
   const prev = b.pages[b.pages.length - 1];
@@ -594,9 +607,11 @@ function render() {
   if (d) d.oninput = () => { state.draft = d.value; store.set("draft", d.value); };
   if (d && state.pasteHint) d.focus();
   const ag = document.getElementById("autoGo"); if (ag) ag.onchange = () => { state.autoGo = ag.checked; store.set("autoGo", ag.checked); };
-  const nt = document.getElementById("newTitle"); if (nt) nt.oninput = () => { state.newTitle = nt.value; };
+  const nt = document.getElementById("newTitle"); if (nt) nt.oninput = () => { state.newTitle = nt.value; renderHeader(); };
+  const no = document.getElementById("newOrig"); if (no) no.oninput = () => { state.newOrig = no.value; renderHeader(); };
+  const na = document.getElementById("newAuthor"); if (na) na.oninput = () => { state.newAuthor = na.value; renderHeader(); };
   const pl = document.getElementById("pageLabel"); if (pl) pl.oninput = () => { state.pageLabel = pl.value; };
-  const bp = document.getElementById("bookPick"); if (bp) bp.onchange = () => { state.book = bp.value; if (bp.value !== "__new") store.set("book", bp.value); render(); };
+  const bp = document.getElementById("bookPick"); if (bp) bp.onchange = () => { state.book = bp.value; state.result = null; state.dup = null; state.msg = ""; if (bp.value !== "__new") store.set("book", bp.value); render(); };
   const img = document.getElementById("img"); if (img) img.onchange = () => { if (img.files[0]) { state.file = img.files[0]; render(); } };
   const th = document.getElementById("thumb"); if (th && state.file) th.src = URL.createObjectURL(state.file);
   const q = document.getElementById("q");
@@ -606,6 +621,11 @@ function render() {
 document.addEventListener("click", e => {
   const b = e.target.closest("button, #card, [data-vk]"); if (!b) return;
   const t = tab();
+  if (b.dataset.rename) {
+    const id = b.dataset.rename, inp = document.querySelector(`input[data-rnin="${CSS.escape(id)}"]`), t = inp ? inp.value.trim() : "";
+    if (!t || !db) return;
+    return void Promise.all(dbPages.filter(p => p.book === id).map(p => db.collection("pages").doc(p.dbId).update({ bookTitle: t }))).catch(() => {});
+  }
   if (b.id === "go") { state.dup = null; return translate(); }
   if (b.id === "dupCancel") { state.dup = null; return render(); }
   if (b.id === "dupForce") {
@@ -644,7 +664,12 @@ document.addEventListener("keydown", e => {
   if (state.rdOpen && e.key === "Escape" && !state.pop) { state.rdOpen = false; return render(); }
   if (e.key === "Escape" && state.pop) { state.pop = null; return render(); }
   if (e.target.classList && e.target.classList.contains("nw") && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.target.click(); return; } if (e.target.id === "card" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); state.flipped = !state.flipped; render(); } });
-document.getElementById("bookSel").onchange = e => { state.book = e.target.value; store.set("book", state.book); state.deck = null; render(); };
+document.getElementById("bookSel").onchange = e => {
+  state.book = e.target.value; state.deck = null; state.pop = null; state.result = null; state.dup = null; state.msg = "";
+  if (state.book === "__new") { if (location.hash !== "#them-trang") return void (location.hash = "#them-trang"); }
+  else store.set("book", state.book);
+  render();
+};
 // Trình duyệt không cho trang tự đọc bộ nhớ tạm, nên bắt sự kiện Dán của người dùng (chữ hoặc ảnh) ở bất cứ đâu trong tab.
 document.addEventListener("paste", e => {
   if (tab() !== "them-trang" || state.busy) return;

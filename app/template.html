@@ -56,6 +56,7 @@ main .wrap { padding-block: 20px 48px; }
 button { font: inherit; font-size: .88rem; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); cursor: pointer; }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
 button.good { background: var(--known); border-color: var(--known); color: var(--bg); }
+#jump { font: inherit; font-size: .88rem; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); min-width: 0; }
 input[type="search"] { font: inherit; font-size: .88rem; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); flex: 1 1 160px; min-width: 0; }
 .stat { color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
 .label { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
@@ -146,9 +147,9 @@ details.hard li { margin-bottom: 8px; }
       <span class="seg fs" role="group" aria-label="Cỡ chữ"><button id="fsDown" aria-label="Chữ nhỏ hơn">A−</button><button id="fsUp" aria-label="Chữ to hơn">A+</button></span></div>
     <nav class="tabs" aria-label="Mục">
       <a href="#ban-dich" data-tab="ban-dich">Bản dịch<span class="n" id="nPages">0</span></a>
+      <a href="#them-trang" data-tab="them-trang">+ Thêm</a>
       <a href="#tu-vung" data-tab="tu-vung">Từ vựng<span class="n" id="nVocab">0</span></a>
       <a href="#mau-cau" data-tab="mau-cau">Mẫu câu<span class="n" id="nPat">0</span></a>
-      <a href="#them-trang" data-tab="them-trang">+ Thêm trang</a>
     </nav>
   </div>
 </header>
@@ -203,7 +204,26 @@ function filtered(kind) {
   return items(kind).filter(it => (state.filter === "all" || !known.has(it.key)) &&
     (!q || JSON.stringify(it).toLowerCase().includes(q)));
 }
-function toggleKnown(key, v) { v ? known.add(key) : known.delete(key); store.set("known", [...known]); }
+// Dấu "đã nhớ": lưu cục bộ ngay, đồng thời đẩy lên db riêng của người dùng để điện thoại và máy tính dùng chung (bản ghi mới hơn thắng).
+let uid = null, knownAt = store.get("knownAt", 0), knownTimer = null;
+const knownDoc = () => db.collection("data/users/" + uid).doc("known");
+function toggleKnown(key, v) {
+  v ? known.add(key) : known.delete(key);
+  knownAt = Date.now(); store.set("known", [...known]); store.set("knownAt", knownAt);
+  clearTimeout(knownTimer); knownTimer = setTimeout(pushKnown, 700);
+}
+async function pushKnown() { if (db && uid) try { await knownDoc().set({ keys: [...known], at: knownAt }); } catch (e) {} }
+async function pullKnown() {
+  if (!db || !uid) return;
+  try {
+    const snap = await knownDoc().get(), d = snap.exists ? snap.data() : null;
+    if (d && Array.isArray(d.keys) && d.at > knownAt) {
+      known.clear(); d.keys.forEach(k => known.add(k)); knownAt = d.at;
+      store.set("known", [...known]); store.set("knownAt", knownAt); render();
+    } else if (!d || d.at < knownAt) { if (!knownAt && known.size) knownAt = Date.now(); pushKnown(); }
+  } catch (e) {}
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) pullKnown(); });
 function speak(text) {
   try { const b = book(); const u = new SpeechSynthesisUtterance(text); u.lang = b.lang === "zh" ? "zh-CN" : "en-GB"; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) {}
 }
@@ -278,7 +298,8 @@ function renderReading() {
   const b = book();
   if (!b || !b.pages.length) return `<p class="empty">Chưa có trang nào. Dán một trang sách cho Claude để bắt đầu.</p>`;
   const vocab = items("tu-vung"), vw = state.view, left = vocab.filter(v => !known.has(v.key)).length;
-  return `<div class="toolbar"><button class="primary" id="openReader">Đọc kiểu Kindle</button><span class="seg" role="group" aria-label="Hiển thị">
+  const jump = b.pages.length > 3 ? `<select id="jump" aria-label="Đi tới trang"><option value="">Đi tới trang…</option>${b.pages.map(p => `<option value="${p.n}">Trang ${pad(p.n)}</option>`).join("")}</select>` : "";
+  return `<div class="toolbar"><button class="primary" id="openReader">Đọc kiểu Kindle</button>${b.pages.length > 1 ? `<button data-viewpage="${b.pages[b.pages.length - 1].n}">Trang mới nhất</button>` : ""}${jump}<span class="seg" role="group" aria-label="Hiển thị">
       <button data-view="both" aria-pressed="${vw === "both"}">Song ngữ</button><button data-view="src" aria-pressed="${vw === "src"}">Bản gốc</button><button data-view="vi" aria-pressed="${vw === "vi"}">Bản dịch</button></span>
       <span class="stat">${b.pages.length} trang · ${left} từ mới chưa nhớ</span></div>` +
     b.pages.map(p => `<article class="page" id="p-${p.n}"><div class="page-head"><span class="label">Trang ${pad(p.n)}${p.label ? ` · trang sách ${esc(p.label)}` : ""}</span><span class="pg">${esc(p.date || "")}</span></div>
@@ -607,6 +628,7 @@ function render() {
   if (d) d.oninput = () => { state.draft = d.value; store.set("draft", d.value); };
   if (d && state.pasteHint) d.focus();
   const ag = document.getElementById("autoGo"); if (ag) ag.onchange = () => { state.autoGo = ag.checked; store.set("autoGo", ag.checked); };
+  const jp = document.getElementById("jump"); if (jp) jp.onchange = () => { if (jp.value) { state.scrollTo = "p-" + jp.value; render(); } };
   const nt = document.getElementById("newTitle"); if (nt) nt.oninput = () => { state.newTitle = nt.value; renderHeader(); };
   const no = document.getElementById("newOrig"); if (no) no.oninput = () => { state.newOrig = no.value; renderHeader(); };
   const na = document.getElementById("newAuthor"); if (na) na.oninput = () => { state.newAuthor = na.value; renderHeader(); };
@@ -689,10 +711,13 @@ document.addEventListener("paste", e => {
   const use = n => window.claude ? window.claude.use(n).catch(() => null) : Promise.resolve(null);
   const [d, s, u] = await Promise.all([use("db"), use("sample"), use("user")]);
   db = d; sample = s; isOwner = !!(u && await u.isOwner());
+  try { uid = u && u.id ? await u.id() : null; } catch (e) { uid = null; }
+  pullKnown();
   if (s) canImage = !!(await s.limits().catch(() => null))?.images;
   if (db) db.collection("pages").onSnapshot(snap => { dbPages = snap.docs.map(x => ({ ...x.data(), dbId: x.id })); render(); }, () => {});
   render();
 })();
-addEventListener("hashchange", () => { state.flipped = false; state.pop = null; render(); window.scrollTo(0, 0); });
+addEventListener("hashchange", () => { state.flipped = false; state.pop = null; store.set("tab", tab()); render(); window.scrollTo(0, 0); });
+if (!location.hash) { const t = store.get("tab", ""); if (["them-trang", "tu-vung", "mau-cau"].includes(t)) location.hash = "#" + t; }
 render();
 </script>

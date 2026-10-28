@@ -245,12 +245,23 @@ function renderHeader() {
 
 // Tìm từ mới (chưa thuộc) trong một đoạn bản gốc; chấp nhận dạng chia (popularize → popularized, grind → grinds).
 function wordRegex(w, lang) {
-  if (lang === "zh") return new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g");
-  const parts = w.trim().split(/\s+/).map(t => {
-    const e = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    return t.length > 3 ? e.replace(/(e|y)$/i, "") + "[a-z]*" : e + "(?:s|es)?";
-  });
-  return new RegExp("\\b" + parts.join("\\s+") + "\\b", "gi");
+  // Bỏ chú thích trong ngoặc ở tên từ vựng, ví dụ "project (v.)" -> "project".
+  const clean = w.replace(/\s*\([^)]*\)/g, "").trim() || w;
+  const esc1 = t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (lang === "zh") return new RegExp(esc1(clean), "g");
+  // Chỉ nhận các dạng chia thông dụng của đúng từ đó (s, es, ed, ing, ies, ied, nhân đôi phụ âm...), không so theo gốc từ
+  // để "prey" không khớp nhầm "present".
+  const forms = t => {
+    const lw = t.toLowerCase(); if (lw.length <= 2) return [lw]; if (lw.length === 3) return [lw, lw + "s", lw + "es"];
+    const f = new Set([lw, lw + "s", lw + "es", lw + "ed", lw + "d", lw + "ing", lw + "ly", lw + "er", lw + "est"]);
+    const last = lw[lw.length - 1];
+    if (last === "e") { f.add(lw.slice(0, -1) + "ing"); f.add(lw + "r"); f.add(lw + "st"); }
+    if (last === "y" && !/[aeiou]y$/.test(lw)) { const b = lw.slice(0, -1); ["ies", "ied", "ier", "iest", "ily"].forEach(x => f.add(b + x)); }
+    if (/[^aeiou][aeiou][^aeiouwxy]$/.test(lw)) { ["ed", "ing", "er"].forEach(x => f.add(lw + last + x)); }
+    return [...f];
+  };
+  const parts = clean.split(/\s+/).map(t => "(?:" + forms(t).map(esc1).join("|") + ")");
+  return new RegExp("(?<![\\p{L}\\p{N}])" + parts.join("\\s+") + "(?![\\p{L}\\p{N}])", "giu");
 }
 function markNew(text, vocab, lang) {
   return markTerms(text, vocab.filter(v => !known.has(v.key)).map(v => ({ key: v.key, re: wordRegex(v.w, lang) })));

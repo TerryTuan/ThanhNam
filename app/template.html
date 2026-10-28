@@ -139,7 +139,7 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 };
-const state = { draft: store.get("draft", ""), pageLabel: "", file: null, busy: false, msg: "", err: false, result: null, newTitle: "", confirmDel: null, book: store.get("book", REPO_BOOKS[0] && REPO_BOOKS[0].id), mode: { "tu-vung": "list", "mau-cau": "list" }, filter: "all", q: "", deck: null, idx: 0, flipped: false, view: store.get("view", "both"), pop: null };
+const state = { draft: store.get("draft", ""), pageLabel: "", file: null, busy: false, msg: "", err: false, result: null, newTitle: "", confirmDel: null, book: store.get("book", REPO_BOOKS[0] && REPO_BOOKS[0].id), mode: { "tu-vung": "list", "mau-cau": "list" }, filter: "all", q: "", deck: null, idx: 0, flipped: false, autoGo: store.get("autoGo", true), pasteHint: false, view: store.get("view", "both"), pop: null };
 const known = new Set(store.get("known", []));
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const pad = n => String(n).padStart(3, "0");
@@ -301,7 +301,10 @@ function renderAdd() {
       <div class="row"><select id="bookPick">${BOOKS.map(x => `<option value="${esc(x.id)}"${x.id === state.book ? " selected" : ""}>${esc(x.title)}</option>`).join("")}<option value="__new"${state.book === "__new" ? " selected" : ""}>+ Sách mới…</option></select>
       ${state.book === "__new" ? `<input type="text" id="newTitle" placeholder="Tên sách mới" value="${esc(state.newTitle)}">` : `<span class="stat">Trang sẽ lưu: ${pad(next)}</span>`}</div></div>
     <div class="field"><label class="label" for="draft">Nội dung trang (tiếng Anh hoặc tiếng Trung)</label>
-      <textarea id="draft" placeholder="Dán chữ của trang sách vào đây. Cũng có thể dán thẳng ảnh chụp màn hình (Ctrl+V).">${esc(state.draft)}</textarea>
+      <div class="row"><button class="primary" id="pasteBtn">Dán từ bộ nhớ</button>${state.draft || state.file ? `<button id="clearDraft">Xoá ô</button>` : ""}
+        <label class="help"><input type="checkbox" id="autoGo"${state.autoGo ? " checked" : ""}> Tự dịch ngay khi dán</label></div>
+      ${state.pasteHint ? `<div class="status">Ô đã sẵn sàng. Trên điện thoại: nhấn giữ vào ô bên dưới rồi chọn <b>Dán</b>. Trên máy tính: bấm Ctrl+V (Mac: ⌘+V).</div>` : ""}
+      <textarea id="draft" placeholder="Nhấn giữ vào đây rồi chọn Dán (hoặc Ctrl+V). Dán được cả chữ lẫn ảnh chụp màn hình.">${esc(state.draft)}</textarea>
       <div class="row">${canImage ? `<label class="help" for="img">Hoặc chọn ảnh chụp trang:</label><input type="file" id="img" accept="image/*">` : ""}
       <input type="text" id="pageLabel" placeholder="Số trang trong sách (không bắt buộc)" value="${esc(state.pageLabel)}"></div>
       ${state.file ? `<div class="row"><img class="thumb" id="thumb" alt="Ảnh trang sách"><button id="dropImg">Bỏ ảnh</button></div>` : ""}</div>
@@ -335,6 +338,7 @@ Quy tắc: vocab 8–15 mục, CHỈ từ vượt trình độ trên (tiếng An
 }
 
 async function translate() {
+  if (!sample || !db || !isOwner || state.busy) return render();
   const hasImage = !!state.file;
   if (!state.draft.trim() && !hasImage) { state.msg = "Hãy dán nội dung trang hoặc chọn ảnh trước."; state.err = true; return render(); }
   let b = book();
@@ -374,6 +378,8 @@ function render() {
   v.innerHTML = (t === "ban-dich" ? renderReading() + renderSheet() : t === "them-trang" ? renderAdd() : renderStudy(t));
   const d = document.getElementById("draft");
   if (d) d.oninput = () => { state.draft = d.value; store.set("draft", d.value); };
+  if (d && state.pasteHint) d.focus();
+  const ag = document.getElementById("autoGo"); if (ag) ag.onchange = () => { state.autoGo = ag.checked; store.set("autoGo", ag.checked); };
   const nt = document.getElementById("newTitle"); if (nt) nt.oninput = () => { state.newTitle = nt.value; };
   const pl = document.getElementById("pageLabel"); if (pl) pl.oninput = () => { state.pageLabel = pl.value; };
   const bp = document.getElementById("bookPick"); if (bp) bp.onchange = () => { state.book = bp.value; if (bp.value !== "__new") store.set("book", bp.value); render(); };
@@ -387,6 +393,8 @@ document.addEventListener("click", e => {
   const b = e.target.closest("button, #card, .nw"); if (!b) return;
   const t = tab();
   if (b.id === "go") return translate();
+  if (b.id === "pasteBtn") { state.pasteHint = true; return render(); }
+  if (b.id === "clearDraft") { state.draft = ""; store.set("draft", ""); state.file = null; state.result = null; state.msg = ""; }
   if (b.id === "stop") return state.ctl && state.ctl.abort();
   if (b.dataset.view) { state.view = b.dataset.view; store.set("view", state.view); }
   else if (b.dataset.vk) state.pop = state.pop === b.dataset.vk ? null : b.dataset.vk;
@@ -411,10 +419,20 @@ document.addEventListener("keydown", e => {
   if (e.key === "Escape" && state.pop) { state.pop = null; return render(); }
   if (e.target.classList && e.target.classList.contains("nw") && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.target.click(); return; } if (e.target.id === "card" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); state.flipped = !state.flipped; render(); } });
 document.getElementById("bookSel").onchange = e => { state.book = e.target.value; store.set("book", state.book); state.deck = null; render(); };
+// Trình duyệt không cho trang tự đọc bộ nhớ tạm, nên bắt sự kiện Dán của người dùng (chữ hoặc ảnh) ở bất cứ đâu trong tab.
 document.addEventListener("paste", e => {
-  if (tab() !== "them-trang" || !canImage) return;
-  const f = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith("image/"))?.getAsFile();
-  if (f) { e.preventDefault(); state.file = f; render(); }
+  if (tab() !== "them-trang" || state.busy) return;
+  const f = canImage && [...(e.clipboardData?.items || [])].find(i => i.type.startsWith("image/"))?.getAsFile();
+  const text = e.clipboardData?.getData("text/plain") || "";
+  if (f) { e.preventDefault(); state.file = f; }
+  else if (text.trim()) {
+    if (e.target.id !== "draft") { e.preventDefault(); state.draft = (state.draft ? state.draft + "\n" : "") + text; }
+    else setTimeout(() => { state.draft = e.target.value; store.set("draft", state.draft); state.pasteHint = false; state.autoGo ? translate() : render(); });
+    if (e.target.id === "draft") return;
+    store.set("draft", state.draft);
+  } else return;
+  state.pasteHint = false;
+  state.autoGo ? translate() : render();
 });
 (async () => {
   const use = n => window.claude ? window.claude.use(n).catch(() => null) : Promise.resolve(null);

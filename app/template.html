@@ -302,7 +302,7 @@ function renderAdd() {
       <div class="row"><select id="bookPick">${BOOKS.map(x => `<option value="${esc(x.id)}"${x.id === state.book ? " selected" : ""}>${esc(x.title)}</option>`).join("")}<option value="__new"${state.book === "__new" ? " selected" : ""}>+ Sách mới…</option></select>
       ${state.book === "__new" ? `<input type="text" id="newTitle" placeholder="Tên sách mới" value="${esc(state.newTitle)}">` : `<span class="stat">Trang sẽ lưu: ${pad(next)}</span>`}</div></div>
     <div class="field"><label class="label" for="draft">Nội dung trang (tiếng Anh hoặc tiếng Trung)</label>
-      <div class="row"><button class="primary" id="pasteBtn">Dán từ bộ nhớ</button>${state.draft || state.file ? `<button id="clearDraft">Xoá ô</button>` : ""}
+      <div class="row"><button class="primary" id="pasteBtn">Dán và dịch</button>${state.draft || state.file ? `<button id="clearDraft">Xoá ô</button>` : ""}
         <label class="help"><input type="checkbox" id="autoGo"${state.autoGo ? " checked" : ""}> Tự dịch ngay khi dán</label></div>
       ${state.pasteHint ? `<div class="status">Ô đã sẵn sàng. Trên điện thoại: nhấn giữ vào ô bên dưới rồi chọn <b>Dán</b>. Trên máy tính: bấm Ctrl+V (Mac: ⌘+V).</div>` : ""}
       <textarea id="draft" placeholder="Nhấn giữ vào đây rồi chọn Dán (hoặc Ctrl+V). Dán được cả chữ lẫn ảnh chụp màn hình.">${esc(state.draft)}</textarea>
@@ -376,6 +376,32 @@ async function translate() {
   } finally { state.busy = false; render(); }
 }
 
+// Thử đọc bộ nhớ tạm ngay trong lần bấm (một số trình duyệt cho phép, iPhone có thể hiện bong bóng "Dán" để bấm).
+// Nếu bị chặn thì quay về cách cũ: đưa con trỏ vào ô để người dùng tự dán.
+async function pasteFromClipboard() {
+  const fallback = () => { state.pasteHint = true; render(); };
+  const cb = navigator.clipboard;
+  if (!cb || state.busy) return fallback();
+  try {
+    if (canImage && cb.read) {
+      try {
+        for (const item of await cb.read()) {
+          const type = item.types.find(t => t.startsWith("image/"));
+          if (type) { state.file = new File([await item.getType(type)], "trang." + type.split("/")[1], { type }); state.draft = ""; state.pasteHint = false; return translate(); }
+          if (item.types.includes("text/plain")) {
+            const text = await (await item.getType("text/plain")).text();
+            if (text.trim()) { state.draft = text; store.set("draft", text); state.file = null; state.pasteHint = false; return translate(); }
+          }
+        }
+      } catch (e) { if (!cb.readText) throw e; }
+    }
+    const text = cb.readText ? await cb.readText() : "";
+    if (!text.trim()) return fallback();
+    state.draft = text; store.set("draft", text); state.file = null; state.pasteHint = false;
+    translate();
+  } catch (e) { fallback(); }
+}
+
 function render() {
   BOOKS = allBooks();
   renderHeader();
@@ -398,7 +424,7 @@ document.addEventListener("click", e => {
   const b = e.target.closest("button, #card, [data-vk]"); if (!b) return;
   const t = tab();
   if (b.id === "go") return translate();
-  if (b.id === "pasteBtn") { state.pasteHint = true; return render(); }
+  if (b.id === "pasteBtn") return pasteFromClipboard();
   if (b.id === "clearDraft") { state.draft = ""; store.set("draft", ""); state.file = null; state.result = null; state.msg = ""; }
   if (b.id === "stop") return state.ctl && state.ctl.abort();
   if (b.dataset.view) { state.view = b.dataset.view; store.set("view", state.view); }

@@ -131,6 +131,7 @@ input[type="search"] { font: inherit; font-size: .88rem; padding: 6px 10px; bord
 .add .help { font-size: .85rem; color: var(--muted); }
 .thumb { max-height: 160px; border: 1px solid var(--line); border-radius: 8px; }
 .status { padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--ink); font-size: .9rem; white-space: pre-wrap; }
+.status.warn { background: var(--new-soft); border: 1px solid var(--new); }
 .status.err { background: var(--surface); border: 1px solid var(--line); }
 details.hard { margin-top: 6px; }
 details.hard summary { cursor: pointer; color: var(--accent); font-size: .9rem; }
@@ -279,7 +280,7 @@ function renderReading() {
   return `<div class="toolbar"><button class="primary" id="openReader">Đọc kiểu Kindle</button><span class="seg" role="group" aria-label="Hiển thị">
       <button data-view="both" aria-pressed="${vw === "both"}">Song ngữ</button><button data-view="src" aria-pressed="${vw === "src"}">Bản gốc</button><button data-view="vi" aria-pressed="${vw === "vi"}">Bản dịch</button></span>
       <span class="stat">${b.pages.length} trang · ${left} từ mới chưa nhớ</span></div>` +
-    b.pages.map(p => `<article class="page"><div class="page-head"><span class="label">Trang ${pad(p.n)}${p.label ? ` · trang sách ${esc(p.label)}` : ""}</span><span class="pg">${esc(p.date || "")}</span></div>
+    b.pages.map(p => `<article class="page" id="p-${p.n}"><div class="page-head"><span class="label">Trang ${pad(p.n)}${p.label ? ` · trang sách ${esc(p.label)}` : ""}</span><span class="pg">${esc(p.date || "")}</span></div>
       ${vw !== "vi" ? `<div class="src">${(p.source || []).map(t => `<p lang="${esc(b.lang)}">${markNew(t, vocab, b.lang)}</p>`).join("")}</div>` : ""}
       ${vw !== "src" ? (p.translation || []).map(t => `<p>${markVi(t, viTerms(p))}</p>`).join("") : ""}
       ${p.note ? `<p class="note">${esc(p.note)}</p>` : ""}
@@ -358,6 +359,8 @@ function renderAdd() {
       ${state.file ? `<div class="row"><img class="thumb" id="thumb" alt="Ảnh trang sách"><button id="dropImg">Bỏ ảnh</button></div>` : ""}</div>
     <div class="row"><button class="primary" id="go"${state.busy ? " disabled" : ""}>${state.busy ? "Đang dịch…" : "Dịch và lưu trang"}</button>${state.busy ? `<button id="stop">Dừng</button>` : ""}
       <span class="help">Mất khoảng 30–90 giây. Lần đầu Claude sẽ hỏi bạn cho phép.</span></div>
+    ${state.dup ? `<div class="status warn" role="alert"><b>Trang này đã dịch rồi.</b> Nội dung giống ${state.dup.pct}% với <b>Trang ${pad(state.dup.n)}</b> của sách này, nên chưa lưu thêm.
+      <div class="row" style="margin-top:8px"><button data-viewpage="${state.dup.n}">Xem Trang ${pad(state.dup.n)}</button><button id="dupForce">Vẫn lưu thành trang mới</button><button id="dupCancel">Bỏ qua</button></div></div>` : ""}
     ${state.msg ? `<div class="status${state.err ? " err" : ""}" id="status">${esc(state.msg)}</div>` : ""}
     ${r ? `<article class="result page"><div class="page-head"><span class="label">${state.result ? "Đã lưu" : "Trang mới nhất"} · Trang ${pad(r.n)}${r.label ? ` · trang sách ${esc(r.label)}` : ""}</span><span class="pg">Bấm vào từ tô màu để xem nghĩa</span></div>
       ${Array.from({ length: Math.max(src.length, vi.length) }, (_, i) => `
@@ -423,7 +426,38 @@ async function analyze(page) {
   } finally { state.busy = false; render(); }
 }
 
-async function translate() {
+// Phát hiện trang đã dịch: so các cụm 5 từ liên tiếp. Hai trang Kindle liền nhau chỉ trùng một hai câu ở mép trang, nên chỉ báo khi trùng từ 60% trở lên.
+const shingles = t => { const w = String(t).toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean), out = new Set(); for (let i = 0; i + 5 <= w.length; i++) out.add(w.slice(i, i + 5).join(" ")); return out; };
+function findDuplicate(text, pages) {
+  const mine = shingles(text); if (mine.size < 3) return null;
+  let best = null;
+  for (const p of pages) {
+    const theirs = shingles((p.source || []).join(" ")); let hit = 0;
+    for (const x of mine) if (theirs.has(x)) hit++;
+    const r = hit / mine.size;
+    if (r >= 0.6 && (!best || r > best.ratio)) best = { page: p, ratio: r };
+  }
+  return best;
+}
+function showDup(d, pending) {
+  state.dup = { n: d.page.n, pct: Math.round(d.ratio * 100), pending: pending || null };
+  state.err = true; state.msg = ""; state.busy = false; render();
+}
+
+async function savePage(b, next, out) {
+  const page = { book: b.id, bookTitle: b.title, bookOriginal: b.original || "", lang: out.lang === "zh" ? "zh" : "en", n: next,
+    label: state.pageLabel.trim(), date: new Date().toISOString().slice(0, 10),
+    source: (out.source || []).map(String), translation: out.translation.map(String), note: String(out.note || ""),
+    vocab: [], patterns: [], hard: [] };
+  await db.collection("pages").doc(`${b.id}-${pad(next)}`).set(page);
+  state.result = page; state.draft = ""; store.set("draft", ""); state.file = null; state.pageLabel = ""; state.dup = null;
+  state.book = b.id; store.set("book", b.id); state.msg = ""; state.newTitle = "";
+  state.busy = false; render();
+  return analyze(page);
+}
+
+// force = true khi người dùng bấm "Vẫn lưu thành trang mới" sau cảnh báo trùng.
+async function translate(force) {
   if (!sample || !db || !isOwner || state.busy) return render();
   const hasImage = !!state.file;
   if (!state.draft.trim() && !hasImage) { state.msg = "Hãy dán nội dung trang hoặc chọn ảnh trước."; state.err = true; return render(); }
@@ -435,21 +469,18 @@ async function translate() {
   }
   const next = b.pages.length ? b.pages[b.pages.length - 1].n + 1 : 1;
   const prev = b.pages[b.pages.length - 1];
+  state.dup = null;
+  // Dán chữ: kiểm tra trùng trước khi tốn lượt dùng Claude.
+  if (!force && !hasImage) { const d = findDuplicate(state.draft, b.pages); if (d) return showDup(d); }
   state.busy = true; state.err = false; state.result = null; state.msg = "Claude đang đọc và dịch trang…"; state.ctl = new AbortController(); render();
   try {
     const out = await sample.json(buildPrompt(b, b.lang, next, prev ? (prev.translation || []).join("\n").slice(-1500) : "", hasImage),
       { signal: state.ctl.signal, ...(hasImage ? { images: [state.file] } : {}),
         onText: ({ text }) => { const el = document.getElementById("status"); if (el) el.textContent = `Claude đang viết… (${text.length} ký tự)`; } });
     if (!out || !Array.isArray(out.translation) || !out.translation.length) throw { code: "invalid_json" };
-    const page = { book: b.id, bookTitle: b.title, bookOriginal: b.original || "", lang: out.lang === "zh" ? "zh" : "en", n: next,
-      label: state.pageLabel.trim(), date: new Date().toISOString().slice(0, 10),
-      source: (out.source || []).map(String), translation: out.translation.map(String), note: String(out.note || ""),
-      vocab: [], patterns: [], hard: [] };
-    await db.collection("pages").doc(`${b.id}-${pad(next)}`).set(page);
-    state.result = page; state.draft = ""; store.set("draft", ""); state.file = null; state.pageLabel = "";
-    state.book = b.id; store.set("book", b.id); state.msg = ""; state.newTitle = "";
-    state.busy = false; render();
-    return analyze(page);
+    // Ảnh: chỉ biết chữ sau khi Claude đọc, nên kiểm tra trùng ở đây và giữ kết quả để khỏi dịch lại nếu người dùng vẫn muốn lưu.
+    if (!force) { const d = findDuplicate((out.source || []).join(" "), b.pages); if (d) return showDup(d, { b, next, out }); }
+    return await savePage(b, next, out);
   } catch (e) {
     state.err = true; state.msg = errVi(e) + (e && e.code === "invalid_json" ? " Bấm dịch lại." : "");
   } finally { state.busy = false; render(); }
@@ -554,6 +585,7 @@ applyRs();
 
 function render() {
   BOOKS = allBooks();
+  setTimeout(() => { if (state.scrollTo) { const el = document.getElementById(state.scrollTo); state.scrollTo = null; if (el) el.scrollIntoView({ block: "start" }); } });
   if (state.rdOpen) updateReader();
   renderHeader();
   const t = tab(), v = document.getElementById("view");
@@ -574,7 +606,14 @@ function render() {
 document.addEventListener("click", e => {
   const b = e.target.closest("button, #card, [data-vk]"); if (!b) return;
   const t = tab();
-  if (b.id === "go") return translate();
+  if (b.id === "go") { state.dup = null; return translate(); }
+  if (b.id === "dupCancel") { state.dup = null; return render(); }
+  if (b.id === "dupForce") {
+    const pend = state.dup && state.dup.pending; state.dup = null;
+    if (pend) { state.busy = true; state.err = false; state.msg = "Đang lưu…"; render(); return savePage(pend.b, pend.next, pend.out).catch(e => { state.err = true; state.msg = errVi(e); state.busy = false; render(); }); }
+    return translate(true);
+  }
+  if (b.dataset.viewpage) { state.scrollTo = "p-" + b.dataset.viewpage; if (location.hash === "#ban-dich") return render(); location.hash = "#ban-dich"; return; }
   if (b.id === "retryAnalyze") { const bk = book(); return analyze(state.result || (bk && bk.pages[bk.pages.length - 1])); }
   if (b.id === "fsUp" || b.id === "fsDown") { rs = Math.round(Math.max(0.8, Math.min(1.8, rs + (b.id === "fsUp" ? 0.1 : -0.1))) * 10) / 10; store.set("rs", rs); return applyRs(); }
   if (b.id === "openReader") return openReader();

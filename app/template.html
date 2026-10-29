@@ -225,6 +225,40 @@ async function pullKnown() {
   } catch (e) {}
 }
 document.addEventListener("visibilitychange", () => { if (!document.hidden) pullKnown(); });
+// ---- Nghe lại bản tiếng Việt (giọng đọc có sẵn của thiết bị) ----
+let ttsId = null, ttsRate = store.get("ttsRate", 1);
+const ttsOK = () => "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+function stopSpeech() { try { speechSynthesis.cancel(); } catch (e) {} ttsId = null; refreshListen(); }
+function refreshListen() {
+  document.querySelectorAll("[data-listen]").forEach(b => { const on = ttsId === b.dataset.listen; b.textContent = on ? "Dừng nghe" : "Nghe tiếng Việt"; b.setAttribute("aria-pressed", on); });
+  document.querySelectorAll("[data-ttsrate]").forEach(b => { b.textContent = `Tốc độ ${ttsRate}×`; });
+}
+// Tách thành các câu ngắn (≤ ~200 ký tự) vì nhiều giọng đọc ngừng giữa chừng với đoạn dài.
+function ttsChunks(text) {
+  const out = []; let cur = "";
+  for (const sent of text.replace(/\s+/g, " ").match(/[^.!?…。]+[.!?…。]*["”')\]]*\s*/g) || [text]) {
+    if ((cur + sent).length > 200 && cur) { out.push(cur.trim()); cur = ""; }
+    cur += sent;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+function listen(id, text) {
+  if (ttsId === id) return stopSpeech();
+  if (!ttsOK()) { state.err = true; state.msg = "Thiết bị này không hỗ trợ đọc thành tiếng."; return render(); }
+  try { speechSynthesis.cancel(); } catch (e) {}
+  const voice = speechSynthesis.getVoices().find(v => /^vi/i.test(v.lang));
+  const chunks = ttsChunks(text); ttsId = id;
+  chunks.forEach((c, i) => {
+    const u = new SpeechSynthesisUtterance(c); u.lang = "vi-VN"; u.rate = ttsRate; if (voice) u.voice = voice;
+    u.onend = () => { if (i === chunks.length - 1 && ttsId === id) { ttsId = null; refreshListen(); } };
+    u.onerror = () => { if (ttsId === id) { ttsId = null; refreshListen(); } };
+    speechSynthesis.speak(u);
+  });
+  refreshListen();
+}
+const listenRow = (b, n) => ttsOK() ? `<div class="row listen-row"><button data-listen="${esc(b.id)}:${n}" aria-pressed="false">Nghe tiếng Việt</button><button data-ttsrate aria-label="Đổi tốc độ đọc">Tốc độ ${ttsRate}×</button></div>` : "";
+
 function speak(text) {
   try { const b = book(); const u = new SpeechSynthesisUtterance(text); u.lang = b.lang === "zh" ? "zh-CN" : "en-GB"; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) {}
 }
@@ -316,7 +350,7 @@ function renderReading() {
       <span class="stat">${b.pages.length} trang · ${left} từ mới chưa nhớ</span></div>` +
     b.pages.map(p => `<article class="page" id="p-${p.n}"><div class="page-head"><span class="label">Trang ${pad(p.n)}${p.label ? ` · trang sách ${esc(p.label)}` : ""}</span><span class="pg">${esc(p.date || "")}</span></div>
       ${vw !== "vi" ? `<div class="src">${(p.source || []).map(t => `<p lang="${esc(b.lang)}">${markNew(t, vocab, b.lang)}</p>`).join("")}</div>` : ""}
-      ${vw !== "src" ? (p.translation || []).map(t => `<p>${markVi(t, viTerms(p))}</p>`).join("") : ""}
+      ${vw !== "src" ? (p.translation || []).map(t => `<p>${markVi(t, viTerms(p))}</p>`).join("") + listenRow(b, p.n) : ""}
       ${p.note ? `<p class="note">${esc(p.note)}</p>` : ""}
       ${(p.hard || []).length ? `<details class="hard"><summary>Phân tích câu khó (${p.hard.length})</summary><ul>${p.hard.map(h => `<li><div class="quote" lang="${esc(b.lang)}">${esc(h.s)}</div><div>${esc(h.parts)}</div><div class="pg">${esc(h.mean)}</div></li>`).join("")}</ul></details>` : ""}
       ${p.insight ? `<details class="hard"><summary>Ý nghĩa sâu xa</summary><div class="insight">${insightHTML(p.insight)}</div></details>` : p.dbId && isOwner && !p.insightDone && (p.vocab || []).length ? `<button class="danger" data-explain="${esc(p.dbId)}">Giải thích ý nghĩa sâu xa</button>` : ""}
@@ -411,6 +445,7 @@ function renderAdd() {
       ${Array.from({ length: Math.max(src.length, vi.length) }, (_, i) => `
         ${src[i] ? `<div class="src"><p lang="${L}">${markNew(src[i], vocab, b.lang)}</p></div>` : ""}
         ${vi[i] ? `<p>${markVi(vi[i], vt)}</p>` : ""}`).join("")}
+      ${listenRow(b, r.n)}
       ${r.note ? `<p class="note">${esc(r.note)}</p>` : ""}
       ${!(r.vocab || []).length && !state.busy ? `<p><button class="primary" id="retryAnalyze">Tạo từ vựng và mẫu câu</button></p>` : ""}
       <h3>Từ vựng (${(r.vocab || []).length})</h3>${(r.vocab || []).map(v => { const k = b.id + "|tu-vung|" + v.w; return `<div><span class="${known.has(k) ? "" : "nw"}" role="button" tabindex="0" data-vk="${esc(k)}" lang="${L}"><b>${esc(v.w)}</b></span> <span class="ipa">${esc(v.ipa)}</span> — ${esc(v.mean)}</div>`; }).join("")}
@@ -655,7 +690,7 @@ function updateReader(frac) {
   document.getElementById("rdSheet").innerHTML = renderSheet(false);
   layoutReader(frac);
 }
-function openReader() { state.rdOpen = true; state.pop = null; updateReader(store.get(rdKey(), 0)); }
+function openReader() { stopSpeech(); state.rdOpen = true; state.pop = null; updateReader(store.get(rdKey(), 0)); }
 document.getElementById("reader").addEventListener("click", e => {
   if (e.target.closest("button, [data-vk], .sheet")) {
     const b = e.target.closest("button");
@@ -690,6 +725,7 @@ function render() {
   renderHeader();
   const t = tab(), v = document.getElementById("view");
   v.innerHTML = (t === "ban-dich" ? renderReading() + renderSheet() : t === "them-trang" ? renderAdd() + renderSheet() : renderStudy(t));
+  refreshListen();
   const d = document.getElementById("draft");
   if (d) d.oninput = () => { state.draft = d.value; store.set("draft", d.value); };
   if (d && state.pasteHint) d.focus();
@@ -714,6 +750,12 @@ document.addEventListener("click", e => {
     if (!t || !db) return;
     return void Promise.all(dbPages.filter(p => p.book === id).map(p => db.collection("pages").doc(p.dbId).update({ bookTitle: t }))).catch(() => {});
   }
+  if (b.dataset.listen) {
+    const [bid, n] = [b.dataset.listen.slice(0, b.dataset.listen.lastIndexOf(":")), +b.dataset.listen.slice(b.dataset.listen.lastIndexOf(":") + 1)];
+    const pg = (BOOKS.find(x => x.id === bid) || { pages: [] }).pages.find(x => x.n === n);
+    return pg ? listen(b.dataset.listen, (pg.translation || []).join(" ")) : undefined;
+  }
+  if (b.hasAttribute("data-ttsrate")) { const r = [0.8, 1, 1.2, 1.5]; ttsRate = r[(r.indexOf(ttsRate) + 1) % r.length]; store.set("ttsRate", ttsRate); if (ttsId) { const id = ttsId, [bid, n] = [id.slice(0, id.lastIndexOf(":")), +id.slice(id.lastIndexOf(":") + 1)]; const pg = (BOOKS.find(x => x.id === bid) || { pages: [] }).pages.find(x => x.n === n); if (pg) { ttsId = null; listen(id, (pg.translation || []).join(" ")); } } return refreshListen(); }
   if (b.id === "go") { state.dup = null; return translate(); }
   if (b.id === "dupCancel") { state.dup = null; return render(); }
   if (b.id === "dupForce") {
@@ -785,7 +827,7 @@ document.addEventListener("paste", e => {
   if (db) db.collection("pages").onSnapshot(snap => { dbPages = snap.docs.map(x => ({ ...x.data(), dbId: x.id })); render(); }, () => {});
   render();
 })();
-addEventListener("hashchange", () => { state.flipped = false; state.pop = null; store.set("tab", tab()); render(); window.scrollTo(0, 0); });
+addEventListener("hashchange", () => { stopSpeech(); state.flipped = false; state.pop = null; store.set("tab", tab()); render(); window.scrollTo(0, 0); });
 if (!location.hash) { const t = store.get("tab", ""); if (["them-trang", "tu-vung", "mau-cau"].includes(t)) location.hash = "#" + t; }
 render();
 </script>

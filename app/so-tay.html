@@ -233,29 +233,42 @@ function refreshListen() {
   document.querySelectorAll("[data-listen]").forEach(b => { const on = ttsId === b.dataset.listen; b.textContent = on ? "Dừng nghe" : "Nghe tiếng Việt"; b.setAttribute("aria-pressed", on); });
   document.querySelectorAll("[data-ttsrate]").forEach(b => { b.textContent = `Tốc độ ${ttsRate}×`; });
 }
-// Tách thành các câu ngắn (≤ ~200 ký tự) vì nhiều giọng đọc ngừng giữa chừng với đoạn dài.
+// Mỗi câu một lần đọc để ngắt nghỉ tự nhiên; câu hỏi và câu cảm thán nâng giọng một chút. Câu quá dài tách ở dấu phẩy.
 function ttsChunks(text) {
-  const out = []; let cur = "";
-  for (const sent of text.replace(/\s+/g, " ").match(/[^.!?…。]+[.!?…。]*["”')\]]*\s*/g) || [text]) {
-    if ((cur + sent).length > 200 && cur) { out.push(cur.trim()); cur = ""; }
-    cur += sent;
+  const out = [];
+  const sents = text.replace(/\s+/g, " ").match(/[^.!?…。]+[.!?…。]*["”')\]]*\s*/g) || [text];
+  for (const raw of sents) {
+    const sent = raw.trim(); if (!sent) continue;
+    const pitch = /\?["”')\]]*$/.test(sent) ? 1.12 : /!["”')\]]*$/.test(sent) ? 1.08 : 1;
+    let parts = [sent];
+    if (sent.length > 220) { parts = []; let cur = ""; for (const piece of sent.split(/(?<=[,;:])\s+/)) { if ((cur + " " + piece).length > 180 && cur) { parts.push(cur.trim()); cur = ""; } cur += " " + piece; } if (cur.trim()) parts.push(cur.trim()); }
+    parts.forEach(t => out.push({ t, pitch }));
   }
-  if (cur.trim()) out.push(cur.trim());
   return out;
 }
+const viVoices = () => { try { return speechSynthesis.getVoices().filter(v => /^vi/i.test(v.lang)); } catch (e) { return []; } };
+const voiceScore = v => (/premium|enhanced|nâng cao|cao cấp|natural|neural|siri/i.test(v.name) ? 2 : 0) + (v.localService === false ? 1 : 0);
+function pickVoice() { const vs = viVoices(), want = store.get("ttsVoice", ""); return vs.find(v => v.name === want) || [...vs].sort((a, b) => voiceScore(b) - voiceScore(a))[0]; }
 function listen(id, text) {
   if (ttsId === id) return stopSpeech();
   if (!ttsOK()) { state.err = true; state.msg = "Thiết bị này không hỗ trợ đọc thành tiếng."; return render(); }
   try { speechSynthesis.cancel(); } catch (e) {}
-  const voice = speechSynthesis.getVoices().find(v => /^vi/i.test(v.lang));
-  const chunks = ttsChunks(text); ttsId = id;
+  const voice = pickVoice(), chunks = ttsChunks(text); ttsId = id;
   chunks.forEach((c, i) => {
-    const u = new SpeechSynthesisUtterance(c); u.lang = "vi-VN"; u.rate = ttsRate; if (voice) u.voice = voice;
+    const u = new SpeechSynthesisUtterance(c.t); u.lang = "vi-VN"; u.rate = ttsRate; u.pitch = c.pitch; if (voice) u.voice = voice;
     u.onend = () => { if (i === chunks.length - 1 && ttsId === id) { ttsId = null; refreshListen(); } };
     u.onerror = () => { if (ttsId === id) { ttsId = null; refreshListen(); } };
     speechSynthesis.speak(u);
   });
   refreshListen();
+}
+// Chọn giọng đọc và hướng dẫn tải giọng chất lượng cao (giọng "Nâng cao/Cao cấp" của iPhone tự nhiên hơn nhiều so với giọng mặc định).
+function ttsSettings() {
+  if (!ttsOK()) return "";
+  const vs = viVoices(), cur = pickVoice();
+  const pick = vs.length > 1 ? `<label class="help">Giọng đọc: <select data-ttsvoice aria-label="Giọng đọc">${vs.map(v => `<option value="${esc(v.name)}"${cur && v.name === cur.name ? " selected" : ""}>${esc(v.name)}</option>`).join("")}</select></label>` : vs.length === 1 ? `<span class="help">Giọng đọc: ${esc(vs[0].name)}</span>` : `<span class="help">Máy chưa có giọng tiếng Việt riêng.</span>`;
+  return `<details class="hard"><summary>Muốn giọng đọc hay hơn?</summary><div style="margin-top:8px;display:grid;gap:8px">${pick}
+    <div class="help">Giọng đọc là của thiết bị nên khá đều giọng, khó có cảm xúc như người thật. Giọng chất lượng cao sẽ tự nhiên hơn nhiều. Trên iPhone: <b>Cài đặt › Trợ năng › Nội dung được đọc › Giọng nói › Tiếng Việt</b>, tải giọng có chữ <b>Nâng cao</b> hoặc <b>Cao cấp</b>, rồi mở lại phần mềm. Trên Android: <b>Cài đặt › Quản lý chung › Chuyển văn bản thành giọng nói</b> (hoặc Google TTS) và tải dữ liệu giọng tiếng Việt.</div></div></details>`;
 }
 const listenRow = (b, n) => ttsOK() ? `<div class="row listen-row"><button data-listen="${esc(b.id)}:${n}" aria-pressed="false">Nghe tiếng Việt</button><button data-ttsrate aria-label="Đổi tốc độ đọc">Tốc độ ${ttsRate}×</button></div>` : "";
 
@@ -345,7 +358,7 @@ function renderReading() {
   if (!b || !b.pages.length) return `<p class="empty">Chưa có trang nào. Dán một trang sách cho Claude để bắt đầu.</p>`;
   const vocab = items("tu-vung"), vw = state.view, left = vocab.filter(v => !known.has(v.key)).length;
   const jump = b.pages.length > 3 ? `<select id="jump" aria-label="Đi tới trang"><option value="">Đi tới trang…</option>${b.pages.map(p => `<option value="${p.n}">Trang ${pad(p.n)}</option>`).join("")}</select>` : "";
-  return `<div class="toolbar"><button class="primary" id="openReader">Đọc kiểu Kindle</button>${b.pages.length > 1 ? `<button data-viewpage="${b.pages[b.pages.length - 1].n}">Trang mới nhất</button>` : ""}${jump}<span class="seg" role="group" aria-label="Hiển thị">
+  return ttsSettings() + `<div class="toolbar"><button class="primary" id="openReader">Đọc kiểu Kindle</button>${b.pages.length > 1 ? `<button data-viewpage="${b.pages[b.pages.length - 1].n}">Trang mới nhất</button>` : ""}${jump}<span class="seg" role="group" aria-label="Hiển thị">
       <button data-view="both" aria-pressed="${vw === "both"}">Song ngữ</button><button data-view="src" aria-pressed="${vw === "src"}">Bản gốc</button><button data-view="vi" aria-pressed="${vw === "vi"}">Bản dịch</button></span>
       <span class="stat">${b.pages.length} trang · ${left} từ mới chưa nhớ</span></div>` +
     b.pages.map(p => `<article class="page" id="p-${p.n}"><div class="page-head"><span class="label">Trang ${pad(p.n)}${p.label ? ` · trang sách ${esc(p.label)}` : ""}</span><span class="pg">${esc(p.date || "")}</span></div>
@@ -445,7 +458,7 @@ function renderAdd() {
       ${Array.from({ length: Math.max(src.length, vi.length) }, (_, i) => `
         ${src[i] ? `<div class="src"><p lang="${L}">${markNew(src[i], vocab, b.lang)}</p></div>` : ""}
         ${vi[i] ? `<p>${markVi(vi[i], vt)}</p>` : ""}`).join("")}
-      ${listenRow(b, r.n)}
+      ${listenRow(b, r.n)}${ttsSettings()}
       ${r.note ? `<p class="note">${esc(r.note)}</p>` : ""}
       ${!(r.vocab || []).length && !state.busy ? `<p><button class="primary" id="retryAnalyze">Tạo từ vựng và mẫu câu</button></p>` : ""}
       <h3>Từ vựng (${(r.vocab || []).length})</h3>${(r.vocab || []).map(v => { const k = b.id + "|tu-vung|" + v.w; return `<div><span class="${known.has(k) ? "" : "nw"}" role="button" tabindex="0" data-vk="${esc(k)}" lang="${L}"><b>${esc(v.w)}</b></span> <span class="ipa">${esc(v.ipa)}</span> — ${esc(v.mean)}</div>`; }).join("")}
@@ -755,7 +768,7 @@ document.addEventListener("click", e => {
     const pg = (BOOKS.find(x => x.id === bid) || { pages: [] }).pages.find(x => x.n === n);
     return pg ? listen(b.dataset.listen, (pg.translation || []).join(" ")) : undefined;
   }
-  if (b.hasAttribute("data-ttsrate")) { const r = [0.8, 1, 1.2, 1.5]; ttsRate = r[(r.indexOf(ttsRate) + 1) % r.length]; store.set("ttsRate", ttsRate); if (ttsId) { const id = ttsId, [bid, n] = [id.slice(0, id.lastIndexOf(":")), +id.slice(id.lastIndexOf(":") + 1)]; const pg = (BOOKS.find(x => x.id === bid) || { pages: [] }).pages.find(x => x.n === n); if (pg) { ttsId = null; listen(id, (pg.translation || []).join(" ")); } } return refreshListen(); }
+  if (b.hasAttribute("data-ttsrate")) { const r = [0.8, 0.9, 1, 1.15, 1.3]; ttsRate = r[(r.indexOf(ttsRate) + 1) % r.length]; store.set("ttsRate", ttsRate); if (ttsId) { const id = ttsId, [bid, n] = [id.slice(0, id.lastIndexOf(":")), +id.slice(id.lastIndexOf(":") + 1)]; const pg = (BOOKS.find(x => x.id === bid) || { pages: [] }).pages.find(x => x.n === n); if (pg) { ttsId = null; listen(id, (pg.translation || []).join(" ")); } } return refreshListen(); }
   if (b.id === "go") { state.dup = null; return translate(); }
   if (b.id === "dupCancel") { state.dup = null; return render(); }
   if (b.id === "dupForce") {
@@ -791,6 +804,10 @@ document.addEventListener("click", e => {
   else if (b.id === "card") state.flipped = !state.flipped;
   render();
 });
+document.addEventListener("change", e => {
+  if (e.target.matches && e.target.matches("[data-ttsvoice]")) { store.set("ttsVoice", e.target.value); document.querySelectorAll("[data-ttsvoice]").forEach(x => { x.value = e.target.value; }); }
+});
+try { speechSynthesis.addEventListener("voiceschanged", () => { if (!ttsId) render(); }); } catch (e) {}
 document.addEventListener("keydown", e => {
   if (state.rdOpen && !state.pop && (e.key === "ArrowRight" || e.key === "ArrowLeft")) return goPage(state.rdPage + (e.key === "ArrowRight" ? 1 : -1));
   if (state.rdOpen && e.key === "Escape" && !state.pop) { state.rdOpen = false; return render(); }

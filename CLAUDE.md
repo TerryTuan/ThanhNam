@@ -47,3 +47,7 @@ Phần mềm tự tạo sau từ vựng; khi trả lời trong chat cũng thêm 
 Mỗi từ vựng/mẫu câu có mức nhớ 0–3 (lưu trong `lv`, đồng bộ cùng dấu "đã nhớ" trong db riêng của người dùng, không nằm trong repo).
 Tab Từ vựng và Mẫu câu có chế độ "Trò chơi" (trắc nghiệm, điền từ, gõ từ; chọn mẫu, chọn công thức, sắp xếp câu). Đúng thì tăng mức, đạt 3 thì tự chuyển "Đã nhớ"; sai thì về 0.
 Danh sách mặc định chỉ hiện mục "Cần nhớ", các mục đã nhớ nằm trong phần thu gọn. Vì vậy mỗi `ex` của từ vựng phải chứa đúng từ đó (để làm câu điền từ) và mỗi mẫu câu phải có `ex` đầy đủ, 4–14 từ (để làm câu sắp xếp).
+
+## Ưu tiên từ hay gặp
+Mỗi từ vựng có độ hay gặp (số lần xuất hiện trong bản gốc cả cuốn; mẫu câu: số trang dùng mẫu đó). Danh sách và thẻ ghi nhớ mặc định xếp hay gặp trước, trò chơi chọn mục theo điểm
+hay gặp x mức nhớ còn thiếu. Vì vậy trường `w` của từ vựng nên là dạng gốc như trong sách; chú thích loại từ trong ngoặc làm giảm độ chính xác khi đếm.

@@ -293,7 +293,14 @@ async function pullKnown() {
     } else if (!d || d.at < knownAt) { if (!knownAt && known.size) knownAt = Date.now(); pushKnown(); }
   } catch (e) {}
 }
-document.addEventListener("visibilitychange", () => { if (!document.hidden) pullKnown(); });
+// Quay lại phần mềm khi đang ở tab "+ Thêm" (ví dụ vừa copy trang từ ứng dụng đọc sách): về đầu trang, con trỏ vào ô để dán ngay.
+function readyToPaste() {
+  if (tab() !== "them-trang" || state.busy || state.rdOpen) return;
+  state.focusAdd = true; render();
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { pullKnown(); readyToPaste(); } });
+addEventListener("focus", () => readyToPaste());
+addEventListener("pageshow", () => readyToPaste());
 // ---- Nghe lại bản tiếng Việt (giọng đọc có sẵn của thiết bị) ----
 let ttsId = null, ttsRate = store.get("ttsRate", 1);
 const ttsOK = () => "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
@@ -1028,7 +1035,7 @@ document.addEventListener("click", e => {
   if (b.id === "toTop") return window.scrollTo(0, 0);
   if (b.id === "toEnd") { const bk = book(), last = bk && bk.pages[bk.pages.length - 1], el = last && document.getElementById("p-" + last.n); return el ? el.scrollIntoView({ block: "start" }) : undefined; }
   if (b.id === "pasteBtn") return pasteFromClipboard();
-  if (b.id === "clearDraft") { state.draft = ""; store.set("draft", ""); state.file = null; state.result = null; state.msg = ""; }
+  if (b.id === "clearDraft") { state.draft = ""; store.set("draft", ""); state.file = null; state.result = null; state.msg = ""; state.focusAdd = true; }
   if (b.id === "stop") return state.ctl && state.ctl.abort();
   if (b.dataset.view) { state.view = b.dataset.view; store.set("view", state.view); }
   else if (b.dataset.vk) state.pop = state.pop === b.dataset.vk ? null : b.dataset.vk;
@@ -1100,5 +1107,6 @@ document.addEventListener("paste", e => {
 })();
 addEventListener("hashchange", () => { if (tab() !== "them-trang") state.focusAdd = false; stopSpeech(); state.flipped = false; state.pop = null; store.set("tab", tab()); render(); window.scrollTo(0, 0); });
 if (!location.hash) { const t = store.get("tab", ""); if (["them-trang", "tu-vung", "mau-cau"].includes(t)) location.hash = "#" + t; }
+if (tab() === "them-trang") state.focusAdd = true;
 render();
 </script>

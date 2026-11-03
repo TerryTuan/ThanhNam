@@ -14,6 +14,8 @@
   --accent-soft: #dcebf1;
   --known: #2f7d4f;
   --known-soft: #dff0e5;
+  --wrong: #a8322a;
+  --wrong-soft: #f9e2df;
   --new: #9a4a00;       /* new-word ink */
   --new-soft: #fbe9cf;
   --font-read: "Literata", "Noto Serif", "Noto Serif SC", Georgia, serif;
@@ -22,11 +24,11 @@
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #0f161d; --surface: #17212b; --ink: #e3eaf0; --muted: #93a3b2; --line: #2a3744;
-  --accent: #6cb8d4; --accent-soft: #1b3341; --known: #7cc99a; --known-soft: #1a3326; --new: #f0b46a; --new-soft: #3a2a14; color-scheme: dark;
+  --accent: #6cb8d4; --accent-soft: #1b3341; --known: #7cc99a; --known-soft: #1a3326; --wrong: #f0958d; --wrong-soft: #3b1d1a; --new: #f0b46a; --new-soft: #3a2a14; color-scheme: dark;
 } }
 :root[data-theme="dark"] {
   --bg: #0f161d; --surface: #17212b; --ink: #e3eaf0; --muted: #93a3b2; --line: #2a3744;
-  --accent: #6cb8d4; --accent-soft: #1b3341; --known: #7cc99a; --known-soft: #1a3326; --new: #f0b46a; --new-soft: #3a2a14; color-scheme: dark;
+  --accent: #6cb8d4; --accent-soft: #1b3341; --known: #7cc99a; --known-soft: #1a3326; --wrong: #f0958d; --wrong-soft: #3b1d1a; --new: #f0b46a; --new-soft: #3a2a14; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 15px; line-height: 1.5; }
@@ -123,6 +125,33 @@ input[type="search"] { font: inherit; font-size: .88rem; padding: 6px 10px; bord
 #rdSheet .sheet { z-index: 40; }
 #reader[hidden] { display: none; }
 
+/* Trò chơi ôn tập */
+.dots { font-size: .7rem; letter-spacing: .12em; color: var(--accent); margin-left: 6px; white-space: nowrap; }
+.mini { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.mini > span { min-width: 0; overflow-wrap: anywhere; }
+.game { display: grid; gap: 12px; }
+.ghead { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.gbar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.gbar i { display: block; height: 100%; background: var(--accent); }
+.gq { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px 16px; display: grid; gap: 12px; }
+.gq .big { font-family: var(--font-read); font-size: 1.7rem; font-weight: 600; overflow-wrap: anywhere; }
+.gq input[type="text"] { font: inherit; flex: 1 1 140px; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+.game .help { font-size: .85rem; color: var(--muted); }
+.opts { display: grid; gap: 8px; }
+.opt { text-align: left; padding: 12px 14px; font-size: 1rem; line-height: 1.4; overflow-wrap: anywhere; }
+.opt .sub { display: block; font-size: .8rem; color: var(--muted); margin-top: 2px; }
+.opt.right, .gans.right { background: var(--known-soft); border-color: var(--known); }
+.opt.wrong, .gans.wrong { background: var(--wrong-soft); border-color: var(--wrong); }
+.gfb { border-radius: 12px; padding: 12px 14px; display: grid; gap: 6px; border: 1px solid var(--line); background: var(--surface); }
+.gfb.right { background: var(--known-soft); border-color: var(--known); }
+.gfb.wrong { background: var(--wrong-soft); border-color: var(--wrong); }
+.gfb .ex { font-family: var(--font-read); font-style: italic; color: var(--muted); }
+.chips, .gans { display: flex; flex-wrap: wrap; gap: 8px; }
+.gans { min-height: 52px; padding: 8px; border: 1px dashed var(--line); border-radius: 10px; align-items: center; }
+.chip { font-family: var(--font-read); font-size: 1rem; padding: 8px 12px; }
+.chip.on { background: var(--accent-soft); border-color: var(--accent); }
+.chip:disabled:not(.on) { opacity: .35; }
+
 /* Thêm trang */
 .add { display: grid; gap: 14px; }
 .add .field { display: grid; gap: 6px; }
@@ -171,8 +200,9 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 };
-const state = { draft: store.get("draft", ""), pageLabel: "", file: null, busy: false, msg: "", err: false, result: null, newTitle: "", newOrig: "", newAuthor: "", confirmDel: null, book: store.get("book", REPO_BOOKS[0] && REPO_BOOKS[0].id), mode: { "tu-vung": "list", "mau-cau": "list" }, filter: "all", q: "", deck: null, idx: 0, flipped: false, rdOpen: false, rdLang: store.get("rdLang", "vi"), rdSize: store.get("rdSize", 19), rdPage: 0, rdPages: 1, autoGo: store.get("autoGo", true), pasteHint: false, view: store.get("view", "both"), pop: null };
+const state = { draft: store.get("draft", ""), pageLabel: "", file: null, busy: false, msg: "", err: false, result: null, newTitle: "", newOrig: "", newAuthor: "", confirmDel: null, book: store.get("book", REPO_BOOKS[0] && REPO_BOOKS[0].id), mode: { "tu-vung": "list", "mau-cau": "list" }, filter: "todo", foldOpen: {}, game: null, q: "", deck: null, idx: 0, flipped: false, rdOpen: false, rdLang: store.get("rdLang", "vi"), rdSize: store.get("rdSize", 19), rdPage: 0, rdPages: 1, autoGo: store.get("autoGo", true), pasteHint: false, view: store.get("view", "both"), pop: null };
 const known = new Set(store.get("known", []));
+let lv = store.get("lv", {});
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const pad = n => String(n).padStart(3, "0");
 // Trang trong repo + trang thêm từ phần mềm (lưu trong db), gộp theo số thứ tự.
@@ -208,19 +238,23 @@ function filtered(kind) {
 // Dấu "đã nhớ": lưu cục bộ ngay, đồng thời đẩy lên db riêng của người dùng để điện thoại và máy tính dùng chung (bản ghi mới hơn thắng).
 let uid = null, knownAt = store.get("knownAt", 0), knownTimer = null;
 const knownDoc = () => db.collection("data/users/" + uid).doc("known");
-function toggleKnown(key, v) {
-  v ? known.add(key) : known.delete(key);
-  knownAt = Date.now(); store.set("known", [...known]); store.set("knownAt", knownAt);
+function touchKnown() {
+  knownAt = Date.now(); store.set("known", [...known]); store.set("knownAt", knownAt); store.set("lv", lv);
   clearTimeout(knownTimer); knownTimer = setTimeout(pushKnown, 700);
 }
-async function pushKnown() { if (db && uid) try { await knownDoc().set({ keys: [...known], at: knownAt }); } catch (e) {} }
+function toggleKnown(key, v) {
+  if (v) { known.add(key); lv[key] = 3; } else { known.delete(key); delete lv[key]; }
+  touchKnown();
+}
+async function pushKnown() { if (db && uid) try { await knownDoc().set({ keys: [...known], lv, at: knownAt }); } catch (e) {} }
 async function pullKnown() {
   if (!db || !uid) return;
   try {
     const snap = await knownDoc().get(), d = snap.exists ? snap.data() : null;
     if (d && Array.isArray(d.keys) && d.at > knownAt) {
       known.clear(); d.keys.forEach(k => known.add(k)); knownAt = d.at;
-      store.set("known", [...known]); store.set("knownAt", knownAt); render();
+      lv = d.lv && typeof d.lv === "object" ? d.lv : {};
+      store.set("known", [...known]); store.set("knownAt", knownAt); store.set("lv", lv); render();
     } else if (!d || d.at < knownAt) { if (!knownAt && known.size) knownAt = Date.now(); pushKnown(); }
   } catch (e) {}
 }
@@ -373,31 +407,192 @@ function renderReading() {
 function toolbar(kind) {
   const all = items(kind), k = all.filter(i => known.has(i.key)).length, m = state.mode[kind];
   return `<div class="toolbar">
-    <span class="seg" role="group" aria-label="Chế độ"><button data-mode="list" aria-pressed="${m === "list"}">Danh sách</button><button data-mode="cards" aria-pressed="${m === "cards"}">Thẻ ghi nhớ</button></span>
-    <span class="seg" role="group" aria-label="Lọc"><button data-filter="all" aria-pressed="${state.filter === "all"}">Tất cả</button><button data-filter="todo" aria-pressed="${state.filter === "todo"}">Chưa thuộc</button></span>
+    <span class="seg" role="group" aria-label="Chế độ"><button data-mode="list" aria-pressed="${m === "list"}">Danh sách</button><button data-mode="cards" aria-pressed="${m === "cards"}">Thẻ ghi nhớ</button><button data-mode="game" aria-pressed="${m === "game"}">Trò chơi</button></span>
+    ${m !== "game" ? `<span class="seg" role="group" aria-label="Lọc"><button data-filter="todo" aria-pressed="${state.filter === "todo"}">Cần nhớ</button><button data-filter="all" aria-pressed="${state.filter === "all"}">Tất cả</button></span>` : ""}
     ${m === "list" ? `<input type="search" id="q" placeholder="Tìm…" value="${esc(state.q)}" aria-label="Tìm">` : ""}
     <span class="stat">Đã thuộc ${k}/${all.length}</span></div>`;
 }
 
 function vocabRow(it) {
   return `<div class="item${known.has(it.key) ? " known" : ""}"><div>
-    <div><span class="w" lang="${esc(book().lang)}">${esc(it.w)}</span><span class="pos">${esc(it.pos)}</span></div>
+    <div><span class="w" lang="${esc(book().lang)}">${esc(it.w)}</span><span class="pos">${esc(it.pos)}</span> ${dots(it.key)}</div>
     <div class="ipa">${esc(it.ipa)}</div><div class="mean">${esc(it.mean)}</div>
     <div class="ex" lang="${esc(book().lang)}">${esc(it.ex)}</div><div class="pg">Trang ${pad(it.page)}</div></div>
     <div class="acts"><button data-say="${esc(it.w)}">Nghe</button><button data-known="${esc(it.key)}">${known.has(it.key) ? "Bỏ đánh dấu" : "Đã thuộc"}</button></div></div>`;
 }
 function patRow(it) {
   return `<div class="item${known.has(it.key) ? " known" : ""}"><div>
-    <div class="w">${esc(it.name)}</div><div class="formula">${esc(it.formula)}</div>
+    <div class="w">${esc(it.name)} ${dots(it.key)}</div><div class="formula">${esc(it.formula)}</div>
     <div class="quote" lang="${esc(book().lang)}">${esc(it.src)}</div><div class="mean">${esc(it.explain)}</div>
     <div class="ex" lang="${esc(book().lang)}">${esc(it.ex)}</div><div class="mean">${esc(it.exVi)}</div><div class="pg">Trang ${pad(it.page)}</div></div>
     <div class="acts"><button data-say="${esc(it.ex)}">Nghe</button><button data-known="${esc(it.key)}">${known.has(it.key) ? "Bỏ đánh dấu" : "Đã thuộc"}</button></div></div>`;
 }
 
+// ---- Mức nhớ và trò chơi ôn tập ----
+const lvOf = k => lv[k] || 0;
+const dots = k => `<span class="dots" role="img" aria-label="Mức nhớ ${lvOf(k)} trên 3">${"●".repeat(lvOf(k))}${"○".repeat(3 - lvOf(k))}</span>`;
+const shuf = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const pickOf = a => a[Math.floor(Math.random() * a.length)];
+const norm = t => String(t).toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+const cleanW = w => String(w).replace(/\s*\([^)]*\)/g, "").trim() || String(w);
+const shortTxt = s => String(s).length > 70 ? String(s).slice(0, 67) + "…" : String(s);
+
+function distractors(all, it, field, n) {
+  const seen = new Set([norm(it[field])]), out = [];
+  for (const o of shuf(all)) { if (o.key === it.key || !o[field]) continue; const k = norm(o[field]); if (seen.has(k)) continue; seen.add(k); out.push(o); if (out.length >= n) break; }
+  return out;
+}
+function mkChoices(it, all, field, text, sub) {
+  const list = shuf([it, ...distractors(all, it, field, 3)]);
+  return { choices: list.map(o => ({ text: text(o), sub: sub ? sub(o) : "" })), answer: list.indexOf(it) };
+}
+function makeQ(kind, it, all, lang) {
+  const L = lvOf(it.key);
+  if (kind === "tu-vung") {
+    let t = pickOf(L === 0 ? ["mean", "word"] : L === 1 ? ["word", "cloze"] : ["cloze", lang === "en" ? "type" : "word"]);
+    if (t === "cloze") {
+      const m = it.ex ? new RegExp(wordRegex(it.w, lang).source, "iu").exec(it.ex) : null;
+      if (m) return { type: "cloze", it, text: it.ex.slice(0, m.index) + "_____" + it.ex.slice(m.index + m[0].length), ...mkChoices(it, all, "w", o => cleanW(o.w)) };
+      t = "word";
+    }
+    if (t === "type") return { type: "type", it, answer: cleanW(it.w) };
+    if (t === "mean") return { type: "mean", it, ...mkChoices(it, all, "mean", o => shortTxt(o.mean)) };
+    return { type: "word", it, ...mkChoices(it, all, "w", o => cleanW(o.w)) };
+  }
+  let t = pickOf(L === 0 ? ["which", "formula"] : L === 1 ? ["formula", "order"] : ["order", "which"]);
+  if (t === "order") {
+    const toks = (it.ex || "").trim().split(/\s+/).filter(Boolean);
+    if (lang === "zh" || toks.length < 4 || toks.length > 14) t = "which";
+    else { let pool = shuf(toks.map((_, i) => i)); for (let n = 0; n < 5 && pool.every((v, i) => v === i); n++) pool = shuf(pool); return { type: "order", it, tokens: toks, pool, picked: [] }; }
+  }
+  if (t === "formula") return { type: "formula", it, ...mkChoices(it, all, "formula", o => o.formula) };
+  return { type: "which", it, ...mkChoices(it, all, "name", o => o.name, o => o.formula) };
+}
+
+function startGame(kind) {
+  const all = items(kind), lang = book() ? book().lang : "en";
+  if (all.length < 3) { state.game = { kind, tooFew: true }; return; }
+  const todo = all.filter(i => !known.has(i.key)).sort((a, b) => lvOf(a.key) - lvOf(b.key) || Math.random() - 0.5);
+  const done = shuf(all.filter(i => known.has(i.key)));
+  // Khoảng 8 mục cần nhớ (mức nhớ thấp trước) cộng vài mục đã nhớ để ôn; thiếu thì lấy thêm mục đã nhớ cho đủ 10.
+  const nDone = Math.min(done.length, todo.length >= 8 ? 2 : 10 - todo.length);
+  const picks = shuf([...todo.slice(0, 8), ...done.slice(0, nDone)]);
+  state.game = { kind, lang, all, qs: picks.map(it => makeQ(kind, it, all, lang)), i: 0, score: 0, streak: 0, best: 0, ans: null, missed: [], newKnown: [], demoted: [], retried: false, done: false };
+}
+// Đúng: +1 (câu trắc nghiệm) hoặc +2 (gõ từ, sắp xếp câu). Đạt 3 thì tự chuyển sang "Đã nhớ". Sai: về 0, và nếu đang "Đã nhớ" thì quay lại danh sách cần nhớ.
+function gradeAnswer(q, ok) {
+  const g = state.game, k = q.it.key; let note = "";
+  if (ok) {
+    lv[k] = Math.min(3, lvOf(k) + (q.type === "type" || q.type === "order" ? 2 : 1));
+    if (lv[k] >= 3 && !known.has(k)) { known.add(k); g.newKnown.push(k); note = "Bạn đã nhớ mục này. Nó được chuyển sang “Đã nhớ”."; }
+  } else {
+    lv[k] = 0;
+    if (known.has(k)) { known.delete(k); g.demoted.push(k); note = "Mục này quay lại danh sách cần nhớ."; }
+  }
+  touchKnown();
+  return note;
+}
+function gameAnswer(ok, user) {
+  const g = state.game, q = g.qs[g.i]; if (!g || g.ans) return;
+  const note = gradeAnswer(q, ok);
+  g.ans = { ok, user, note };
+  if (ok) { if (!q.retry) g.score++; g.streak++; g.best = Math.max(g.best, g.streak); }
+  else { g.streak = 0; if (!q.retry && !g.missed.includes(q.it)) g.missed.push(q.it); }
+  render();
+}
+function gameNext() {
+  const g = state.game; g.ans = null; g.i++;
+  if (g.i >= g.qs.length) {
+    if (g.missed.length && !g.retried) { g.retried = true; g.qs.push(...g.missed.map(it => ({ ...makeQ(g.kind, it, g.all, g.lang), retry: true }))); }
+    else g.done = true;
+  }
+  render();
+}
+function gameChoose(i) { const q = state.game.qs[state.game.i]; gameAnswer(i === q.answer, i); }
+function gameCheckType() {
+  const q = state.game.qs[state.game.i], el = document.getElementById("gtype"), v = el ? el.value.trim() : "";
+  if (!v) return;
+  gameAnswer(new RegExp("^" + wordRegex(q.it.w, "en").source + "$", "iu").test(v), v);
+}
+function gamePick(idx) {
+  const g = state.game, q = g.qs[g.i]; if (g.ans || q.picked.includes(idx)) return;
+  q.picked.push(idx);
+  if (q.picked.length < q.tokens.length) return render();
+  gameAnswer(norm(q.picked.map(i => q.tokens[i]).join(" ")) === norm(q.tokens.join(" ")), q.picked.slice());
+}
+function gameUnpick(pos) { const g = state.game, q = g.qs[g.i]; if (g.ans) return; q.picked.splice(pos, 1); render(); }
+
+function renderGame(kind) {
+  if (!state.game || state.game.kind !== kind) startGame(kind);
+  const g = state.game;
+  if (g.tooFew) return `<p class="empty">Cần ít nhất 3 mục để chơi. Hãy dịch thêm trang nhé.</p>`;
+  if (g.done) return renderGameResult(g);
+  const q = g.qs[g.i], it = q.it, L = esc(g.lang), total = g.qs.length;
+  const opts = () => `<div class="opts">${q.choices.map((c, i) => `<button class="opt${g.ans ? (i === q.answer ? " right" : g.ans.user === i ? " wrong" : "") : ""}" data-gopt="${i}"${g.ans ? " disabled" : ""}>${esc(c.text)}${c.sub ? `<span class="sub">${esc(c.sub)}</span>` : ""}</button>`).join("")}</div>`;
+  let body = "", answerText = "";
+  if (q.type === "mean") {
+    body = `<div class="label">Chọn nghĩa đúng của từ</div><div class="big" lang="${L}">${esc(cleanW(it.w))}</div><div class="ipa">${esc(it.ipa)} · ${esc(it.pos)}</div><div><button data-say="${esc(it.w)}">Nghe</button></div>${opts()}`;
+    answerText = q.choices[q.answer].text;
+  } else if (q.type === "word") {
+    body = `<div class="label">Từ nào có nghĩa này?</div><div class="big" style="font-size:1.3rem">${esc(it.mean)}</div>${opts()}`;
+    answerText = q.choices[q.answer].text;
+  } else if (q.type === "cloze") {
+    body = `<div class="label">Điền từ còn thiếu vào câu</div><div class="big" lang="${L}" style="font-size:1.25rem">${esc(q.text)}</div><div class="help">Gợi ý nghĩa: ${esc(it.mean)}</div>${opts()}`;
+    answerText = q.choices[q.answer].text;
+  } else if (q.type === "type") {
+    const w = q.answer, hint = w.split(/\s+/).map(t => t[0] + "·".repeat(Math.max(0, t.length - 1))).join(" ");
+    body = `<div class="label">Gõ từ tiếng Anh có nghĩa này</div><div class="big" style="font-size:1.3rem">${esc(it.mean)}</div><div class="help">Gợi ý: <b>${esc(hint)}</b></div>
+      <div class="row"><input type="text" id="gtype" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="Từ tiếng Anh"${g.ans ? ` value="${esc(g.ans.user)}" disabled` : ""}>${g.ans ? "" : `<button class="primary" id="gcheck">Kiểm tra</button>`}</div>`;
+    answerText = q.answer;
+  } else if (q.type === "which") {
+    body = `<div class="label">Câu này dùng mẫu câu nào?</div><div class="big" lang="${L}" style="font-size:1.2rem">${esc(it.ex)}</div>${opts()}`;
+    answerText = q.choices[q.answer].text;
+  } else if (q.type === "formula") {
+    body = `<div class="label">Chọn công thức đúng của mẫu</div><div class="big" style="font-size:1.3rem">${esc(it.name)}</div><div class="quote" lang="${L}" style="text-align:left">${esc(it.src)}</div>${opts()}`;
+    answerText = q.choices[q.answer].text;
+  } else {
+    const chips = q.pool.map(i => `<button class="chip" data-gchip="${i}"${q.picked.includes(i) || g.ans ? " disabled" : ""} lang="${L}">${esc(q.tokens[i])}</button>`).join("");
+    const built = q.picked.map((i, pos) => `<button class="chip on" data-gunpick="${pos}"${g.ans ? " disabled" : ""} lang="${L}">${esc(q.tokens[i])}</button>`).join("");
+    body = `<div class="label">Sắp xếp các từ thành câu đúng</div><div class="big" style="font-size:1.15rem">${esc(it.exVi)}</div>
+      <div class="gans${g.ans ? (g.ans.ok ? " right" : " wrong") : ""}" aria-label="Câu của bạn">${built || `<span class="help">Chạm vào các từ bên dưới theo thứ tự.</span>`}</div><div class="chips">${chips}</div>`;
+    answerText = q.tokens.join(" ");
+  }
+  let fb = "";
+  if (g.ans) {
+    const detail = q.type === "which" || q.type === "formula" || q.type === "order"
+      ? `<div class="formula">${esc(it.formula)}</div><div>${esc(it.explain)}</div><div class="ex" lang="${L}">${esc(it.ex)}</div><div>${esc(it.exVi)}</div>`
+      : `<div>${esc(it.mean)}</div><div class="ex" lang="${L}">${esc(it.ex)}</div>`;
+    const last = g.i + 1 >= total && (!g.missed.length || g.retried);
+    fb = `<div class="gfb ${g.ans.ok ? "right" : "wrong"}" role="status"><div><b>${g.ans.ok ? "Chính xác!" : "Chưa đúng."}</b>${g.ans.ok ? "" : ` Đáp án: <b lang="${L}">${esc(answerText)}</b>`}</div>
+      ${detail}<div class="help">Mức nhớ ${dots(it.key)} ${esc(g.ans.note)}</div>
+      <div class="row"><button data-say="${esc(q.type === "which" || q.type === "formula" || q.type === "order" ? it.ex : it.w)}">Nghe</button><button class="primary" id="gnext">${last ? "Xem kết quả" : "Tiếp tục"}</button></div></div>`;
+  }
+  return `<div class="game"><div class="ghead"><span class="stat">Câu ${g.i + 1}/${total}${q.retry ? " · ôn lại câu sai" : ""}</span><span class="stat">Đúng ${g.score} · Chuỗi ${g.streak}</span></div>
+    <div class="gbar"><i style="width:${Math.round(g.i / total * 100)}%"></i></div><div class="gq">${body}</div>${fb}</div>`;
+}
+function renderGameResult(g) {
+  const real = g.qs.filter(q => !q.retry).length, by = Object.fromEntries(items(g.kind).map(i => [i.key, i]));
+  const label = k => esc(by[k] ? (by[k].w || by[k].name) : k.split("|").pop()), pct = real ? g.score / real : 0;
+  const msg = pct >= 0.9 ? "Rất tốt!" : pct >= 0.6 ? "Khá tốt, tiếp tục nhé." : "Chưa chắc lắm, ôn thêm một lượt nữa sẽ nhớ hơn.";
+  return `<div class="game"><div class="gq" style="text-align:left"><div class="label">Kết quả</div><div class="big">${g.score}/${real}</div><div>${msg} Chuỗi đúng dài nhất: ${g.best}.</div>
+    ${g.newKnown.length ? `<div class="gfb right"><b>Đã nhớ thêm (${g.newKnown.length}):</b> ${g.newKnown.map(label).join(", ")}</div>` : ""}
+    ${g.missed.length ? `<div class="gfb wrong"><b>Cần ôn lại (${g.missed.length}):</b> ${g.missed.map(i => label(i.key)).join(", ")}</div>` : ""}
+    ${g.demoted.length ? `<div class="help">Quay lại danh sách cần nhớ: ${g.demoted.map(label).join(", ")}</div>` : ""}
+    <div class="row"><button class="primary" id="grestart">Chơi tiếp</button><button data-mode="list">Xem danh sách</button></div></div></div>`;
+}
+// Danh sách "Đã nhớ" thu gọn để danh sách cần nhớ ngắn lại.
+function knownFold(kind) {
+  const q = state.q.trim().toLowerCase();
+  const ks = items(kind).filter(i => known.has(i.key) && (!q || JSON.stringify(i).toLowerCase().includes(q)));
+  if (!ks.length) return "";
+  return `<details class="hard fold"${state.foldOpen[kind] ? " open" : ""}><summary>Đã nhớ (${ks.length}), thu gọn</summary>${ks.map(i => `<div class="mini"><span><b lang="${esc(book().lang)}">${esc(i.w || i.name)}</b> <span class="mean">${esc(shortTxt(i.mean || i.formula || ""))}</span></span><button data-known="${esc(i.key)}">Bỏ đánh dấu</button></div>`).join("")}</details>`;
+}
+
 function renderStudy(kind) {
+  if (state.mode[kind] === "game") return toolbar(kind) + renderGame(kind);
   const list = filtered(kind);
   let body;
-  if (!list.length) body = `<p class="empty">${items(kind).length ? "Bạn đã thuộc hết mục này. Chọn “Tất cả” để ôn lại." : "Chưa có mục nào."}</p>`;
+  if (!list.length) body = `<p class="empty">${items(kind).length ? (state.q.trim() ? "Không tìm thấy mục nào." : "Bạn đã nhớ hết các mục cần nhớ. Vào “Trò chơi” để ôn lại.") : "Chưa có mục nào."}</p>`;
   else if (state.mode[kind] === "list") body = `<div class="items">${list.map(kind === "tu-vung" ? vocabRow : patRow).join("")}</div>`;
   else {
     if (!state.deck || state.deck.kind !== kind) state.deck = { kind, keys: list.map(i => i.key) }, state.idx = 0;
@@ -416,6 +611,7 @@ function renderStudy(kind) {
       <button data-say="${esc(kind === "tu-vung" ? it.w : it.ex)}">Nghe</button><button id="shuffle">Xáo trộn</button>
       <button id="again">Chưa thuộc</button><button class="good" data-known-next="${esc(it.key)}">Đã thuộc</button></div>`;
   }
+  if (state.mode[kind] === "list" && state.filter === "todo") body += knownFold(kind);
   return toolbar(kind) + body;
 }
 
@@ -739,6 +935,7 @@ function render() {
   const t = tab(), v = document.getElementById("view");
   v.innerHTML = (t === "ban-dich" ? renderReading() + renderSheet() : t === "them-trang" ? renderAdd() + renderSheet() : renderStudy(t));
   refreshListen();
+  const gt = document.getElementById("gtype"); if (gt && !gt.disabled) gt.focus();
   const d = document.getElementById("draft");
   if (d) d.oninput = () => { state.draft = d.value; store.set("draft", d.value); };
   if (d && state.pasteHint) d.focus();
@@ -794,7 +991,13 @@ document.addEventListener("click", e => {
     if (state.confirmDel !== b.dataset.del) state.confirmDel = b.dataset.del;
     else { state.confirmDel = null; db.collection("pages").doc(b.dataset.del).delete().catch(() => {}); }
   }
-  else if (b.dataset.mode) { state.mode[t] = b.dataset.mode; state.deck = null; state.flipped = false; }
+  else if (b.dataset.gopt !== undefined) return void gameChoose(+b.dataset.gopt);
+  else if (b.id === "gcheck") return void gameCheckType();
+  else if (b.id === "gnext") return void gameNext();
+  else if (b.dataset.gchip !== undefined) return void gamePick(+b.dataset.gchip);
+  else if (b.dataset.gunpick !== undefined) return void gameUnpick(+b.dataset.gunpick);
+  else if (b.id === "grestart") startGame(t);
+  else if (b.dataset.mode) { state.mode[t] = b.dataset.mode; state.deck = null; state.flipped = false; state.game = null; }
   else if (b.dataset.filter) { state.filter = b.dataset.filter; state.deck = null; state.flipped = false; }
   else if (b.dataset.say) return speak(b.dataset.say);
   else if (b.dataset.known) toggleKnown(b.dataset.known, !known.has(b.dataset.known));
@@ -808,7 +1011,9 @@ document.addEventListener("change", e => {
   if (e.target.matches && e.target.matches("[data-ttsvoice]")) { store.set("ttsVoice", e.target.value); document.querySelectorAll("[data-ttsvoice]").forEach(x => { x.value = e.target.value; }); }
 });
 try { speechSynthesis.addEventListener("voiceschanged", () => { if (!ttsId) render(); }); } catch (e) {}
+document.addEventListener("toggle", e => { if (e.target.classList && e.target.classList.contains("fold")) state.foldOpen[tab()] = e.target.open; }, true);
 document.addEventListener("keydown", e => {
+  if (e.target.id === "gtype" && e.key === "Enter") { e.preventDefault(); return gameCheckType(); }
   if (state.rdOpen && !state.pop && (e.key === "ArrowRight" || e.key === "ArrowLeft")) return goPage(state.rdPage + (e.key === "ArrowRight" ? 1 : -1));
   if (state.rdOpen && e.key === "Escape" && !state.pop) { state.rdOpen = false; return render(); }
   if (e.key === "Escape" && state.pop) { state.pop = null; return render(); }

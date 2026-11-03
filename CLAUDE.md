@@ -42,3 +42,8 @@ tạo `du-lieu.json` mới cho sách chưa có (id, title, original, author, lan
 ## Ý nghĩa sâu xa (trường `insight`)
 Mỗi trang có thêm trường `insight`: 4–7 câu tiếng Việt giải thích ý chính, bối cảnh và điều đáng suy ngẫm của trang (chuỗi rỗng nếu không có gì sâu xa hơn nghĩa bề mặt; `insightDone: true` khi đã thử).
 Phần mềm tự tạo sau từ vựng; khi trả lời trong chat cũng thêm mục "Ý nghĩa sâu xa" ở cuối, và lưu vào `trang-NNN.md` và `du-lieu.json`.
+
+## Mức nhớ và trò chơi
+Mỗi từ vựng/mẫu câu có mức nhớ 0–3 (lưu trong `lv`, đồng bộ cùng dấu "đã nhớ" trong db riêng của người dùng, không nằm trong repo).
+Tab Từ vựng và Mẫu câu có chế độ "Trò chơi" (trắc nghiệm, điền từ, gõ từ; chọn mẫu, chọn công thức, sắp xếp câu). Đúng thì tăng mức, đạt 3 thì tự chuyển "Đã nhớ"; sai thì về 0.
+Danh sách mặc định chỉ hiện mục "Cần nhớ", các mục đã nhớ nằm trong phần thu gọn. Vì vậy mỗi `ex` của từ vựng phải chứa đúng từ đó (để làm câu điền từ) và mỗi mẫu câu phải có `ex` đầy đủ, 4–14 từ (để làm câu sắp xếp).

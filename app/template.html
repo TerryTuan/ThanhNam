@@ -208,11 +208,17 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": 
 const pad = n => String(n).padStart(3, "0");
 // Trang trong repo + trang thêm từ phần mềm (lưu trong db), gộp theo số thứ tự.
 function allBooks() {
-  const list = REPO_BOOKS.map(b => ({ ...b, pages: [...b.pages] }));
+  // Trang trong repo được ưu tiên khi trùng số thứ tự, nhưng vẫn gắn id trong db (để xoá, tạo ý nghĩa sâu xa) và bổ sung trường còn thiếu từ db.
+  const list = REPO_BOOKS.map(b => ({ ...b, pages: b.pages.map(p => ({ book: b.id, bookTitle: b.title, lang: b.lang, ...p })) }));
   for (const p of dbPages) {
     let b = list.find(x => x.id === p.book);
     if (!b) list.push(b = { id: p.book, title: p.bookTitle || p.book, original: p.bookOriginal || "", author: p.bookAuthor || "", lang: p.lang || "en", pages: [] });
-    if (!b.pages.some(x => x.n === p.n)) b.pages.push(p);
+    const ex = b.pages.find(x => x.n === p.n);
+    if (!ex) b.pages.push(p);
+    else {
+      ex.dbId = p.dbId;
+      for (const f of ["insight", "insightDone", "vocab", "patterns", "hard"]) if (p[f] && (!ex[f] || (Array.isArray(ex[f]) && !ex[f].length))) ex[f] = p[f];
+    }
   }
   list.forEach(b => b.pages.sort((a, c) => a.n - c.n));
   return list;

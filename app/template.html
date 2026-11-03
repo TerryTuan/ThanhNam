@@ -981,6 +981,8 @@ function render() {
   const d = document.getElementById("draft");
   if (d) d.oninput = () => { state.draft = d.value; store.set("draft", d.value); };
   if (d && state.pasteHint) d.focus();
+  // Bấm tab "+ Thêm": về đầu trang và đưa con trỏ vào ô nội dung để dán ngay.
+  if (d && state.focusAdd) { state.focusAdd = false; window.scrollTo(0, 0); d.focus({ preventScroll: true }); }
   const ag = document.getElementById("autoGo"); if (ag) ag.onchange = () => { state.autoGo = ag.checked; store.set("autoGo", ag.checked); };
   const jp = document.getElementById("jump"); if (jp) jp.onchange = () => { if (jp.value) { state.scrollTo = "p-" + jp.value; render(); } };
   const nt = document.getElementById("newTitle"); if (nt) nt.oninput = () => { state.newTitle = nt.value; renderHeader(); };
@@ -995,6 +997,8 @@ function render() {
 }
 
 document.addEventListener("click", e => {
+  const addTab = e.target.closest && e.target.closest('nav.tabs a[data-tab="them-trang"]');
+  if (addTab) { state.focusAdd = true; if (location.hash === "#them-trang") { e.preventDefault(); state.pop = null; render(); window.scrollTo(0, 0); } return; }
   const b = e.target.closest("button, #card, [data-vk]"); if (!b) return;
   const t = tab();
   if (b.dataset.rename) {
@@ -1094,7 +1098,7 @@ document.addEventListener("paste", e => {
   if (db) db.collection("pages").onSnapshot(snap => { dbPages = snap.docs.map(x => ({ ...x.data(), dbId: x.id })); render(); }, () => {});
   render();
 })();
-addEventListener("hashchange", () => { stopSpeech(); state.flipped = false; state.pop = null; store.set("tab", tab()); render(); window.scrollTo(0, 0); });
+addEventListener("hashchange", () => { if (tab() !== "them-trang") state.focusAdd = false; stopSpeech(); state.flipped = false; state.pop = null; store.set("tab", tab()); render(); window.scrollTo(0, 0); });
 if (!location.hash) { const t = store.get("tab", ""); if (["them-trang", "tu-vung", "mau-cau"].includes(t)) location.hash = "#" + t; }
 render();
 </script>

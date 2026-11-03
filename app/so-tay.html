@@ -125,6 +125,12 @@ input[type="search"] { font: inherit; font-size: .88rem; padding: 6px 10px; bord
 #rdSheet .sheet { z-index: 40; }
 #reader[hidden] { display: none; }
 
+/* Nút nổi: lên đầu / đến trang cuối trong tab Bản dịch */
+#fab { position: fixed; right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 8; display: grid; gap: 8px; }
+#fab[hidden] { display: none; }
+#fab button { box-shadow: 0 2px 10px rgba(10, 20, 30, .22); border-radius: 20px; padding: 8px 14px; font-weight: 600; }
+#fab #toEnd { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+
 /* Trò chơi ôn tập */
 .freq { font-size: .72rem; color: var(--new); background: var(--new-soft); border-radius: 10px; padding: 1px 7px; margin-left: 6px; white-space: nowrap; font-weight: 600; }
 .dots { font-size: .7rem; letter-spacing: .12em; color: var(--accent); margin-left: 6px; white-space: nowrap; }
@@ -185,9 +191,11 @@ details.hard li { margin-bottom: 8px; }
   </div>
 </header>
 <main><div class="wrap" id="view"></div></main>
+<div id="fab" hidden><button id="toTop" aria-label="Lên đầu trang">↑ Đầu</button><button id="toEnd" aria-label="Đến trang cuối cùng">Trang cuối ↓</button></div>
 <div id="reader" hidden>
   <div class="rd-bar"><button id="closeReader">Đóng</button>
     <span class="seg" role="group" aria-label="Ngôn ngữ đọc"><button data-rdlang="vi">Tiếng Việt</button><button data-rdlang="src">Bản gốc</button><button data-rdlang="both">Song ngữ</button></span>
+    <span class="seg" role="group" aria-label="Đi nhanh"><button id="rdStart">Đầu</button><button id="rdEnd">Cuối</button></span>
     <span class="seg" role="group" aria-label="Cỡ chữ"><button data-rdsize="-1" aria-label="Chữ nhỏ hơn">A−</button><button data-rdsize="1" aria-label="Chữ to hơn">A+</button></span></div>
   <div class="rd-view" id="rdView"><div class="rd-content" id="rdContent"></div></div>
   <div class="rd-foot"><span id="rdWhere"></span><span id="rdPct"></span></div>
@@ -934,6 +942,7 @@ function openReader() { stopSpeech(); state.rdOpen = true; state.pop = null; upd
 document.getElementById("reader").addEventListener("click", e => {
   if (e.target.closest("button, [data-vk], .sheet")) {
     const b = e.target.closest("button");
+    if (b && (b.id === "rdStart" || b.id === "rdEnd")) { e.stopPropagation(); return goPage(b.id === "rdEnd" ? state.rdPages - 1 : 0); }
     if (b && b.id === "closeReader") { state.rdOpen = false; state.pop = null; e.stopPropagation(); return render(); }
     if (b && b.dataset.rdlang) { state.rdLang = b.dataset.rdlang; store.set("rdLang", state.rdLang); e.stopPropagation(); return updateReader(store.get(rdKey(), 0)); }
     if (b && b.dataset.rdsize) { state.rdSize = Math.max(14, Math.min(28, state.rdSize + 2 * b.dataset.rdsize)); store.set("rdSize", state.rdSize); e.stopPropagation(); return layoutReader(); }
@@ -960,6 +969,8 @@ applyRs();
 
 function render() {
   BOOKS = allBooks();
+  const fab = document.getElementById("fab");
+  if (fab) fab.hidden = !(tab() === "ban-dich" && !state.rdOpen && !state.pop && book() && book().pages.length > 1);
   setTimeout(() => { if (state.scrollTo) { const el = document.getElementById(state.scrollTo); state.scrollTo = null; if (el) el.scrollIntoView({ block: "start" }); } });
   if (state.rdOpen) updateReader();
   renderHeader();
@@ -1010,6 +1021,8 @@ document.addEventListener("click", e => {
   if (b.id === "retryAnalyze") { const bk = book(); return analyze(state.result || (bk && bk.pages[bk.pages.length - 1])); }
   if (b.id === "fsUp" || b.id === "fsDown") { rs = Math.round(Math.max(0.8, Math.min(1.8, rs + (b.id === "fsUp" ? 0.1 : -0.1))) * 10) / 10; store.set("rs", rs); return applyRs(); }
   if (b.id === "openReader") return openReader();
+  if (b.id === "toTop") return window.scrollTo(0, 0);
+  if (b.id === "toEnd") { const bk = book(), last = bk && bk.pages[bk.pages.length - 1], el = last && document.getElementById("p-" + last.n); return el ? el.scrollIntoView({ block: "start" }) : undefined; }
   if (b.id === "pasteBtn") return pasteFromClipboard();
   if (b.id === "clearDraft") { state.draft = ""; store.set("draft", ""); state.file = null; state.result = null; state.msg = ""; }
   if (b.id === "stop") return state.ctl && state.ctl.abort();

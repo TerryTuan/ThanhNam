@@ -57,3 +57,7 @@ hay gặp x mức nhớ còn thiếu. Vì vậy trường `w` của từ vựng 
   Nút "Ôn ngay" chơi các mục đến hạn trước, rồi mục cần nhớ điểm cao.
 - Trò chơi có thêm câu "Nghe rồi chọn từ" (dùng giọng đọc của thiết bị).
 - "Tra thêm từ khác" (tab Từ vựng) hỏi Claude nghĩa của từ bất kỳ rồi lưu vào collection `words` (id `<id-sách>__<slug-từ>`, trường book, w, ipa, pos, mean, ex). Từ thêm tay chỉ nằm trong db, hiển thị là "Thêm tay"; khi đồng bộ có thể chép vào `tu-vung.md` nếu người dùng muốn.
+
+## Chạm vào từ để tra
+Ở tab Bản dịch, tab + Thêm và chế độ Kindle (bật nút "Chạm để tra"), chạm vào bất kỳ từ nào trong bản gốc (đoạn `p[lang]`) thì phần mềm xác định từ và câu chứa nó:
+nếu từ hoặc cụm đó đã có trong danh sách từ vựng (kể cả đã nhớ) thì mở giải nghĩa có sẵn, nếu chưa thì hỏi Claude nghĩa theo ngữ cảnh câu (kết quả được nhớ tạm trong phiên) và cho thêm vào collection `words` như mục "Tra thêm từ khác".

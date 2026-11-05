@@ -51,3 +51,9 @@ Danh sách mặc định chỉ hiện mục "Cần nhớ", các mục đã nhớ
 ## Ưu tiên từ hay gặp
 Mỗi từ vựng có độ hay gặp (số lần xuất hiện trong bản gốc cả cuốn; mẫu câu: số trang dùng mẫu đó). Danh sách và thẻ ghi nhớ mặc định xếp hay gặp trước, trò chơi chọn mục theo điểm
 hay gặp x mức nhớ còn thiếu. Vì vậy trường `w` của từ vựng nên là dạng gốc như trong sách; chú thích loại từ trong ngoặc làm giảm độ chính xác khi đếm.
+
+## Ôn hôm nay, nghe và tra thêm từ
+- Lịch ôn: mỗi mục có `due` (thời điểm ôn kế tiếp: mức 0 sau 5 phút, mức 1 sau 1 ngày, mức 2 sau 3 ngày, đã nhớ sau 7 ngày) và thống kê `daily` (số câu mỗi ngày, chuỗi ngày học). Cùng `lv` và dấu đã nhớ, chúng lưu trong db riêng của người dùng, không nằm trong repo.
+  Nút "Ôn ngay" chơi các mục đến hạn trước, rồi mục cần nhớ điểm cao.
+- Trò chơi có thêm câu "Nghe rồi chọn từ" (dùng giọng đọc của thiết bị).
+- "Tra thêm từ khác" (tab Từ vựng) hỏi Claude nghĩa của từ bất kỳ rồi lưu vào collection `words` (id `<id-sách>__<slug-từ>`, trường book, w, ipa, pos, mean, ex). Từ thêm tay chỉ nằm trong db, hiển thị là "Thêm tay"; khi đồng bộ có thể chép vào `tu-vung.md` nếu người dùng muốn.

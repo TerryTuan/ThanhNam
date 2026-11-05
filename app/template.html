@@ -133,6 +133,10 @@ input[type="search"] { font: inherit; font-size: .88rem; padding: 6px 10px; bord
 
 /* Trò chơi ôn tập */
 .freq { font-size: .72rem; color: var(--new); background: var(--new-soft); border-radius: 10px; padding: 1px 7px; margin-left: 6px; white-space: nowrap; font-weight: 600; }
+.reviewbar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; justify-content: space-between; padding: 10px 12px; margin-bottom: 14px; background: var(--accent-soft); border-radius: 12px; }
+.rv-text { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .88rem; }
+.lookup input[type="text"] { font: inherit; flex: 1 1 160px; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
+.lookup .res { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 6px; }
 .dots { font-size: .7rem; letter-spacing: .12em; color: var(--accent); margin-left: 6px; white-space: nowrap; }
 .mini { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .mini > span { min-width: 0; overflow-wrap: anywhere; }
@@ -204,7 +208,7 @@ details.hard li { margin-bottom: 8px; }
 
 <script>
 const REPO_BOOKS = /*__DATA__*/[];
-let dbPages = [], db = null, sample = null, isOwner = false, canImage = false;
+let dbPages = [], dbWords = [], db = null, sample = null, isOwner = false, canImage = false;
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -212,6 +216,7 @@ const store = {
 const state = { draft: store.get("draft", ""), pageLabel: "", file: null, busy: false, msg: "", err: false, result: null, newTitle: "", newOrig: "", newAuthor: "", confirmDel: null, book: store.get("book", REPO_BOOKS[0] && REPO_BOOKS[0].id), mode: { "tu-vung": "list", "mau-cau": "list" }, filter: "todo", sort: store.get("sort", "freq"), foldOpen: {}, game: null, q: "", deck: null, idx: 0, flipped: false, rdOpen: false, rdLang: store.get("rdLang", "vi"), rdSize: store.get("rdSize", 19), rdPage: 0, rdPages: 1, autoGo: store.get("autoGo", true), pasteHint: false, view: store.get("view", "both"), pop: null };
 const known = new Set(store.get("known", []));
 let lv = store.get("lv", {});
+let due = store.get("due", {}), daily = store.get("daily", {});
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const pad = n => String(n).padStart(3, "0");
 // Trang trong repo + trang thêm từ phần mềm (lưu trong db), gộp theo số thứ tự.
@@ -229,6 +234,7 @@ function allBooks() {
     }
   }
   list.forEach(b => b.pages.sort((a, c) => a.n - c.n));
+  for (const w of dbWords) { const b = list.find(x => x.id === w.book); if (b) (b.extra = b.extra || []).push({ w: w.w, ipa: w.ipa, pos: w.pos, mean: w.mean, ex: w.ex, vi: "", extraId: w.dbId }); }
   return list;
 }
 let BOOKS = allBooks();
@@ -238,11 +244,11 @@ const tab = () => ["ban-dich", "tu-vung", "mau-cau", "them-trang"].includes(loca
 // Độ hay gặp: từ vựng = số lần xuất hiện trong bản gốc của cả cuốn (ít nhất bằng số trang liệt kê từ đó); mẫu câu = số trang dùng mẫu đó.
 const freqCache = {};
 function textFreq(b) {
-  const sig = b.id + ":" + b.pages.length + ":" + b.pages.reduce((n, p) => n + (p.source || []).join("").length, 0);
+  const sig = b.id + ":" + b.pages.length + ":" + (b.extra ? b.extra.length : 0) + ":" + b.pages.reduce((n, p) => n + (p.source || []).join("").length, 0);
   if (freqCache[b.id] && freqCache[b.id].sig === sig) return freqCache[b.id].map;
   const text = b.pages.map(p => (p.source || []).join(" ")).join(" \n "), map = {};
   const seen = new Set();
-  for (const p of b.pages) for (const it of p.vocab || []) {
+  for (const p of [...b.pages, { vocab: b.extra || [] }]) for (const it of p.vocab || []) {
     if (!it.w || seen.has(it.w)) continue; seen.add(it.w);
     // Từ có chú thích loại từ như "project (v.)" dễ đếm lẫn nghĩa khác (danh từ, động từ), nên chỉ tính số trang liệt kê.
     if (/\(/.test(it.w)) { map[it.w] = 0; continue; }
@@ -254,7 +260,8 @@ function textFreq(b) {
 function items(kind) {
   const b = book(); if (!b) return [];
   const out = [], seen = new Map(), tf = kind === "tu-vung" ? textFreq(b) : null;
-  for (const p of b.pages) for (const it of (kind === "tu-vung" ? p.vocab : p.patterns) || []) {
+  const srcPages = kind === "tu-vung" && b.extra && b.extra.length ? [...b.pages, { n: 0, vocab: b.extra }] : b.pages;
+  for (const p of srcPages) for (const it of (kind === "tu-vung" ? p.vocab : p.patterns) || []) {
     const key = b.id + "|" + kind + "|" + (it.w || it.name);
     if (seen.has(key)) { seen.get(key).listed++; continue; }
     const row = { ...it, page: p.n, key, listed: 1 };
@@ -273,15 +280,24 @@ function filtered(kind) {
 // Dấu "đã nhớ": lưu cục bộ ngay, đồng thời đẩy lên db riêng của người dùng để điện thoại và máy tính dùng chung (bản ghi mới hơn thắng).
 let uid = null, knownAt = store.get("knownAt", 0), knownTimer = null;
 const knownDoc = () => db.collection("data/users/" + uid).doc("known");
+const DAY = 864e5;
+const dayKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+// Chuỗi ngày học liên tiếp; hôm nay chưa học thì tính từ hôm qua để chưa mất chuỗi.
+function streakDays() {
+  let n = 0; const d = new Date();
+  if (!(daily[dayKey(d)] && daily[dayKey(d)].n)) d.setDate(d.getDate() - 1);
+  while (daily[dayKey(d)] && daily[dayKey(d)].n) { n++; d.setDate(d.getDate() - 1); }
+  return n;
+}
 function touchKnown() {
-  knownAt = Date.now(); store.set("known", [...known]); store.set("knownAt", knownAt); store.set("lv", lv);
+  knownAt = Date.now(); store.set("known", [...known]); store.set("knownAt", knownAt); store.set("lv", lv); store.set("due", due); store.set("daily", daily);
   clearTimeout(knownTimer); knownTimer = setTimeout(pushKnown, 700);
 }
 function toggleKnown(key, v) {
-  if (v) { known.add(key); lv[key] = 3; } else { known.delete(key); delete lv[key]; }
+  if (v) { known.add(key); lv[key] = 3; due[key] = Date.now() + 7 * DAY; } else { known.delete(key); delete lv[key]; delete due[key]; }
   touchKnown();
 }
-async function pushKnown() { if (db && uid) try { await knownDoc().set({ keys: [...known], lv, at: knownAt }); } catch (e) {} }
+async function pushKnown() { if (db && uid) try { await knownDoc().set({ keys: [...known], lv, due, daily, at: knownAt }); } catch (e) {} }
 async function pullKnown() {
   if (!db || !uid) return;
   try {
@@ -289,7 +305,8 @@ async function pullKnown() {
     if (d && Array.isArray(d.keys) && d.at > knownAt) {
       known.clear(); d.keys.forEach(k => known.add(k)); knownAt = d.at;
       lv = d.lv && typeof d.lv === "object" ? d.lv : {};
-      store.set("known", [...known]); store.set("knownAt", knownAt); store.set("lv", lv); render();
+      due = d.due && typeof d.due === "object" ? d.due : {}; daily = d.daily && typeof d.daily === "object" ? d.daily : {};
+      store.set("known", [...known]); store.set("knownAt", knownAt); store.set("lv", lv); store.set("due", due); store.set("daily", daily); render();
     } else if (!d || d.at < knownAt) { if (!knownAt && known.size) knownAt = Date.now(); pushKnown(); }
   } catch (e) {}
 }
@@ -461,8 +478,8 @@ function vocabRow(it) {
   return `<div class="item${known.has(it.key) ? " known" : ""}"><div>
     <div><span class="w" lang="${esc(book().lang)}">${esc(it.w)}</span><span class="pos">${esc(it.pos)}</span> ${dots(it.key)}${freqBadge(it, "lần")}</div>
     <div class="ipa">${esc(it.ipa)}</div><div class="mean">${esc(it.mean)}</div>
-    <div class="ex" lang="${esc(book().lang)}">${esc(it.ex)}</div><div class="pg">Trang ${pad(it.page)}</div></div>
-    <div class="acts"><button data-say="${esc(it.w)}">Nghe</button><button data-known="${esc(it.key)}">${known.has(it.key) ? "Bỏ đánh dấu" : "Đã thuộc"}</button></div></div>`;
+    <div class="ex" lang="${esc(book().lang)}">${esc(it.ex)}</div><div class="pg">${it.page ? "Trang " + pad(it.page) : "Thêm tay"}</div></div>
+    <div class="acts"><button data-say="${esc(it.w)}">Nghe</button>${it.extraId && isOwner ? `<button data-delword="${esc(it.extraId)}">Xoá</button>` : ""}<button data-known="${esc(it.key)}">${known.has(it.key) ? "Bỏ đánh dấu" : "Đã thuộc"}</button></div></div>`;
 }
 function patRow(it) {
   return `<div class="item${known.has(it.key) ? " known" : ""}"><div>
@@ -493,7 +510,9 @@ function mkChoices(it, all, field, text, sub) {
 function makeQ(kind, it, all, lang) {
   const L = lvOf(it.key);
   if (kind === "tu-vung") {
-    let t = pickOf(L === 0 ? ["mean", "word"] : L === 1 ? ["word", "cloze"] : ["cloze", lang === "en" ? "type" : "word"]);
+    let t = pickOf(L === 0 ? ["mean", "word"] : L === 1 ? ["word", "cloze", "listen"] : ["cloze", lang === "en" ? "type" : "word", "listen"]);
+    if (t === "listen" && !ttsOK()) t = "word";
+    if (t === "listen") return { type: "listen", it, ...mkChoices(it, all, "w", o => cleanW(o.w)) };
     if (t === "cloze") {
       const m = it.ex ? new RegExp(wordRegex(it.w, lang).source, "iu").exec(it.ex) : null;
       if (m) return { type: "cloze", it, text: it.ex.slice(0, m.index) + "_____" + it.ex.slice(m.index + m[0].length), ...mkChoices(it, all, "w", o => cleanW(o.w)) };
@@ -516,13 +535,17 @@ function makeQ(kind, it, all, lang) {
 function startGame(kind) {
   const all = items(kind), lang = book() ? book().lang : "en";
   if (all.length < 3) { state.game = { kind, tooFew: true }; return; }
-  // Điểm ưu tiên = độ hay gặp x mức còn thiếu (3 trừ mức nhớ); hay gặp mà chưa nhớ chắc thì chơi trước.
-  const score = i => i.freq * (3 - lvOf(i.key)) + Math.random() * 0.5;
-  const todo = all.filter(i => !known.has(i.key)).sort((a, b) => score(b) - score(a));
-  const done = shuf(all.filter(i => known.has(i.key)));
-  // Khoảng 8 mục cần nhớ (mức nhớ thấp trước) cộng vài mục đã nhớ để ôn; thiếu thì lấy thêm mục đã nhớ cho đủ 10.
-  const nDone = Math.min(done.length, todo.length >= 8 ? 2 : 10 - todo.length);
-  const picks = shuf([...todo.slice(0, 8), ...done.slice(0, nDone)]);
+  // Thứ tự chọn: 1) mục đến hạn ôn (quá hạn lâu nhất trước); 2) mục cần nhớ có điểm cao (độ hay gặp x mức còn thiếu);
+  // 3) vài mục đã nhớ để ôn cho chắc. Tối đa 10 câu.
+  const now = Date.now(), score = i => i.freq * (3 - lvOf(i.key)) + Math.random() * 0.5;
+  const dueList = all.filter(i => due[i.key] && due[i.key] <= now).sort((a, b) => due[a.key] - due[b.key]).slice(0, 10);
+  const taken = new Set(dueList.map(i => i.key));
+  const todo = all.filter(i => !known.has(i.key) && !taken.has(i.key)).sort((a, b) => score(b) - score(a));
+  const picked = [...dueList, ...todo.slice(0, Math.max(0, Math.min(8, 10) - dueList.length))];
+  const pk = new Set(picked.map(i => i.key));
+  const done = shuf(all.filter(i => known.has(i.key) && !pk.has(i.key)));
+  const nDone = picked.length < 8 ? Math.min(done.length, 10 - picked.length) : Math.min(done.length, 10 - picked.length, 2);
+  const picks = shuf([...picked, ...done.slice(0, nDone)]);
   state.game = { kind, lang, all, qs: picks.map(it => makeQ(kind, it, all, lang)), i: 0, score: 0, streak: 0, best: 0, ans: null, missed: [], newKnown: [], demoted: [], retried: false, done: false };
 }
 // Đúng: +1 (câu trắc nghiệm) hoặc +2 (gõ từ, sắp xếp câu). Đạt 3 thì tự chuyển sang "Đã nhớ". Sai: về 0, và nếu đang "Đã nhớ" thì quay lại danh sách cần nhớ.
@@ -535,6 +558,8 @@ function gradeAnswer(q, ok) {
     lv[k] = 0;
     if (known.has(k)) { known.delete(k); g.demoted.push(k); note = "Mục này quay lại danh sách cần nhớ."; }
   }
+  due[k] = Date.now() + [5 * 60e3, DAY, 3 * DAY, 7 * DAY][lv[k]];
+  const dk = dayKey(new Date()); daily[dk] = daily[dk] || { n: 0, ok: 0 }; daily[dk].n++; if (ok) daily[dk].ok++;
   touchKnown();
   return note;
 }
@@ -548,6 +573,7 @@ function gameAnswer(ok, user) {
 }
 function gameNext() {
   const g = state.game; g.ans = null; g.i++;
+  setTimeout(() => { const nq = !g.done && g.qs[g.i]; if (nq && nq.type === "listen") speak(nq.it.w); });
   if (g.i >= g.qs.length) {
     if (g.missed.length && !g.retried) { g.retried = true; g.qs.push(...g.missed.map(it => ({ ...makeQ(g.kind, it, g.all, g.lang), retry: true }))); }
     else g.done = true;
@@ -578,6 +604,9 @@ function renderGame(kind) {
   let body = "", answerText = "";
   if (q.type === "mean") {
     body = `<div class="label">Chọn nghĩa đúng của từ</div><div class="big" lang="${L}">${esc(cleanW(it.w))}</div><div class="ipa">${esc(it.ipa)} · ${esc(it.pos)}</div><div><button data-say="${esc(it.w)}">Nghe</button></div>${opts()}`;
+    answerText = q.choices[q.answer].text;
+  } else if (q.type === "listen") {
+    body = `<div class="label">Nghe rồi chọn từ bạn nghe được</div><div><button class="primary" data-say="${esc(it.w)}">Nghe từ</button></div>${g.ans ? `<div class="ipa">${esc(it.ipa)}</div>` : ""}${opts()}`;
     answerText = q.choices[q.answer].text;
   } else if (q.type === "word") {
     body = `<div class="label">Từ nào có nghĩa này?</div><div class="big" style="font-size:1.3rem">${esc(it.mean)}</div>${opts()}`;
@@ -634,6 +663,47 @@ function knownFold(kind) {
   return `<details class="hard fold"${state.foldOpen[kind] ? " open" : ""}><summary>Đã nhớ (${ks.length}), thu gọn</summary>${ks.map(i => `<div class="mini"><span><b lang="${esc(book().lang)}">${esc(i.w || i.name)}</b> <span class="mean">${esc(shortTxt(i.mean || i.formula || ""))}</span></span><button data-known="${esc(i.key)}">Bỏ đánh dấu</button></div>`).join("")}</details>`;
 }
 
+function reviewBar(kind) {
+  const all = items(kind), now = Date.now();
+  const dn = all.filter(i => due[i.key] && due[i.key] <= now).length, fresh = all.filter(i => !known.has(i.key) && !due[i.key]).length;
+  const t = daily[dayKey(new Date())] || { n: 0, ok: 0 }, st = streakDays();
+  if (!all.length) return "";
+  return `<div class="reviewbar"><div class="rv-text"><span><b>${dn}</b> đến hạn ôn</span><span><b>${fresh}</b> mục mới</span><span>Hôm nay <b>${t.n}</b> câu${t.n ? ` (${t.ok} đúng)` : ""}</span><span>Chuỗi <b>${st}</b> ngày</span></div>
+    <button class="primary" id="reviewNow">${dn ? "Ôn ngay" : "Học ngay"}</button></div>`;
+}
+// ---- Tra thêm từ bất kỳ và thêm vào danh sách từ vựng ----
+state.lookup = { q: "", busy: false, res: null, msg: "" };
+function lookupBox() {
+  if (!sample || !db || !isOwner) return "";
+  const L = state.lookup;
+  return `<details class="hard lookup"${L.open || L.res ? " open" : ""}><summary>Tra thêm từ khác</summary><div style="display:grid;gap:8px;margin-top:8px">
+    <div class="row"><input type="text" id="lookupIn" placeholder="Gõ từ hoặc cụm từ muốn tra" value="${esc(L.q)}" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Từ cần tra"><button class="primary" id="lookupGo"${L.busy ? " disabled" : ""}>${L.busy ? "Đang tra…" : "Tra"}</button></div>
+    ${L.msg ? `<div class="status err">${esc(L.msg)}</div>` : ""}
+    ${L.res ? `<div class="res"><div><b lang="${esc(book().lang)}" style="font-size:1.2rem">${esc(L.res.w)}</b> <span class="ipa">${esc(L.res.ipa || "")}</span> <span class="pos">${esc(L.res.pos || "")}</span></div>
+      <div>${esc(L.res.mean)}</div><div class="ex" lang="${esc(book().lang)}" style="font-style:italic;color:var(--muted)">${esc(L.res.ex || "")}</div>${L.res.note ? `<div class="help" style="font-size:.85rem;color:var(--muted)">${esc(L.res.note)}</div>` : ""}
+      <div class="row"><button data-say="${esc(L.res.w)}">Nghe</button><button class="good" id="lookupAdd">Thêm vào danh sách cần nhớ</button></div></div>` : ""}</div></details>`;
+}
+async function lookupWord() {
+  const L = state.lookup, q = (document.getElementById("lookupIn") || {}).value || L.q; L.q = q.trim();
+  if (!L.q || L.busy || !sample) return;
+  L.busy = true; L.msg = ""; L.res = null; L.open = true; render();
+  try {
+    const b = book();
+    const out = await sample.json(`Bạn là gia sư cho người Việt có trình độ IELTS 6.0 (tiếng Anh) hoặc HSK 4 (tiếng Trung). Người học đang đọc cuốn "${b.title}" và muốn tra: "${L.q}".
+Trả về DUY NHẤT một đối tượng JSON: {"w":"dạng gốc của từ hoặc cụm từ","ipa":"IPA với tiếng Anh; pinyin với tiếng Trung","pos":"từ loại (tiếng Trung thêm âm Hán Việt và cấp HSK)","mean":"nghĩa tiếng Việt ngắn gọn, phổ biến nhất","ex":"một câu ví dụ ngắn, mới, chứa đúng từ này","note":"lưu ý dùng hoặc phân biệt với từ dễ nhầm, tối đa 2 câu tiếng Việt (chuỗi rỗng nếu không cần)"}`, { modelTier: "quick" });
+    if (!out || !out.w || !out.mean) throw { code: "invalid_json" };
+    L.res = { w: String(out.w), ipa: String(out.ipa || ""), pos: String(out.pos || ""), mean: String(out.mean), ex: String(out.ex || ""), note: String(out.note || "") };
+  } catch (e) { L.msg = errVi(e); }
+  finally { L.busy = false; render(); }
+}
+async function lookupAdd() {
+  const L = state.lookup, r = L.res, b = book(); if (!r || !b || !db) return;
+  try {
+    await db.collection("words").doc(`${b.id}__${slug(r.w)}`).set({ book: b.id, w: r.w, ipa: r.ipa, pos: r.pos, mean: r.mean, ex: r.ex, vi: "", added: Date.now() });
+    L.res = null; L.q = ""; L.msg = ""; L.added = r.w;
+  } catch (e) { L.msg = "Chưa lưu được, thử lại."; }
+  render();
+}
 function renderStudy(kind) {
   if (state.mode[kind] === "game") return toolbar(kind) + renderGame(kind);
   const list = filtered(kind);
@@ -653,12 +723,12 @@ function renderStudy(kind) {
       : `<div class="formula">${esc(it.formula)}</div><div class="ex" lang="${L}" style="font-size:1.1rem">${esc(it.ex)}</div><div>${esc(it.explain)}</div><div class="quote" lang="${L}" style="text-align:left">${esc(it.src)}</div>`;
     body = `<div class="card" id="card" role="button" tabindex="0" aria-label="Lật thẻ">${front}
       ${state.flipped ? `<div class="back">${back}</div>` : `<div class="hint">Bấm vào thẻ để xem đáp án</div>`}</div>
-      <div class="card-nav"><span class="stat" style="align-self:center">${state.idx + 1}/${deck.length} · trang ${pad(it.page)}</span>
+      <div class="card-nav"><span class="stat" style="align-self:center">${state.idx + 1}/${deck.length} · ${it.page ? "trang " + pad(it.page) : "thêm tay"}</span>
       <button data-say="${esc(kind === "tu-vung" ? it.w : it.ex)}">Nghe</button><button id="shuffle">Xáo trộn</button>
       <button id="again">Chưa thuộc</button><button class="good" data-known-next="${esc(it.key)}">Đã thuộc</button></div>`;
   }
   if (state.mode[kind] === "list" && state.filter === "todo") body += knownFold(kind);
-  return toolbar(kind) + body;
+  return reviewBar(kind) + (kind === "tu-vung" ? lookupBox() : "") + toolbar(kind) + body;
 }
 
 function slug(s) { return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "sach"; }
@@ -1051,6 +1121,10 @@ document.addEventListener("click", e => {
   else if (b.id === "gnext") return void gameNext();
   else if (b.dataset.gchip !== undefined) return void gamePick(+b.dataset.gchip);
   else if (b.dataset.gunpick !== undefined) return void gameUnpick(+b.dataset.gunpick);
+  else if (b.id === "lookupGo") return void lookupWord();
+  else if (b.id === "lookupAdd") return void lookupAdd();
+  else if (b.dataset.delword) { db.collection("words").doc(b.dataset.delword).delete().catch(() => {}); return; }
+  else if (b.id === "reviewNow") { state.mode[t] = "game"; state.game = null; state.deck = null; }
   else if (b.id === "grestart") startGame(t);
   else if (b.dataset.mode) { state.mode[t] = b.dataset.mode; state.deck = null; state.flipped = false; state.game = null; }
   else if (b.dataset.sort) { state.sort = b.dataset.sort; store.set("sort", state.sort); state.deck = null; state.flipped = false; }
@@ -1067,8 +1141,9 @@ document.addEventListener("change", e => {
   if (e.target.matches && e.target.matches("[data-ttsvoice]")) { store.set("ttsVoice", e.target.value); document.querySelectorAll("[data-ttsvoice]").forEach(x => { x.value = e.target.value; }); }
 });
 try { speechSynthesis.addEventListener("voiceschanged", () => { if (!ttsId) render(); }); } catch (e) {}
-document.addEventListener("toggle", e => { if (e.target.classList && e.target.classList.contains("fold")) state.foldOpen[tab()] = e.target.open; }, true);
+document.addEventListener("toggle", e => { if (e.target.classList && e.target.classList.contains("fold")) state.foldOpen[tab()] = e.target.open; if (e.target.classList && e.target.classList.contains("lookup")) state.lookup.open = e.target.open; }, true);
 document.addEventListener("keydown", e => {
+  if (e.target.id === "lookupIn" && e.key === "Enter") { e.preventDefault(); return lookupWord(); }
   if (e.target.id === "gtype" && e.key === "Enter") { e.preventDefault(); return gameCheckType(); }
   if (state.rdOpen && !state.pop && (e.key === "ArrowRight" || e.key === "ArrowLeft")) return goPage(state.rdPage + (e.key === "ArrowRight" ? 1 : -1));
   if (state.rdOpen && e.key === "Escape" && !state.pop) { state.rdOpen = false; return render(); }
@@ -1102,6 +1177,7 @@ document.addEventListener("paste", e => {
   try { uid = u && u.id ? await u.id() : null; } catch (e) { uid = null; }
   pullKnown();
   if (s) canImage = !!(await s.limits().catch(() => null))?.images;
+  if (db) db.collection("words").onSnapshot(snap => { dbWords = snap.docs.map(x => ({ ...x.data(), dbId: x.id })); render(); }, () => {});
   if (db) db.collection("pages").onSnapshot(snap => { dbPages = snap.docs.map(x => ({ ...x.data(), dbId: x.id })); render(); }, () => {});
   render();
 })();

@@ -129,6 +129,9 @@ input[type="search"] { font: inherit; font-size: .88rem; padding: 6px 10px; bord
 #view p[lang], #rdContent p[lang] { cursor: pointer; -webkit-tap-highlight-color: rgba(31, 111, 139, .15); }
 #rdLookup[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
 
+#errbar { position: fixed; left: 8px; right: 8px; top: calc(8px + env(safe-area-inset-top, 0px)); z-index: 60; display: flex; gap: 8px; align-items: center; justify-content: space-between; background: var(--wrong-soft); color: var(--ink); border: 1px solid var(--wrong); border-radius: 10px; padding: 8px 12px; font-size: .85rem; overflow-wrap: anywhere; }
+#errbar[hidden] { display: none; }
+
 /* Nút nổi: lên đầu / đến trang cuối trong tab Bản dịch */
 #fab { position: fixed; right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 8; display: grid; gap: 8px; }
 #fab[hidden] { display: none; }
@@ -266,7 +269,12 @@ function items(kind) {
   const b = book(); if (!b) return [];
   const out = [], seen = new Map(), tf = kind === "tu-vung" ? textFreq(b) : null;
   const srcPages = kind === "tu-vung" && b.extra && b.extra.length ? [...b.pages, { n: 0, vocab: b.extra }] : b.pages;
-  for (const p of srcPages) for (const it of (kind === "tu-vung" ? p.vocab : p.patterns) || []) {
+  const clean = kind === "tu-vung"
+    ? it => it && typeof it === "object" && typeof it.w === "string" && it.w.trim()
+    : it => it && typeof it === "object" && typeof it.name === "string" && it.name.trim();
+  for (const p of srcPages) for (const raw of (kind === "tu-vung" ? p.vocab : p.patterns) || []) {
+    if (!clean(raw)) continue;
+    const it = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, typeof v === "string" || k === "w" || k === "name" ? String(v ?? "") : v]));
     const key = b.id + "|" + kind + "|" + (it.w || it.name);
     if (seen.has(key)) { seen.get(key).listed++; continue; }
     const row = { ...it, page: p.n, key, listed: 1 };
@@ -302,7 +310,15 @@ function toggleKnown(key, v) {
   if (v) { known.add(key); lv[key] = 3; due[key] = Date.now() + 7 * DAY; } else { known.delete(key); delete lv[key]; delete due[key]; }
   touchKnown();
 }
-async function pushKnown() { if (db && uid) try { await knownDoc().set({ keys: [...known], lv, due, daily, at: knownAt }); } catch (e) {} }
+// Giữ tài liệu dưới giới hạn 256 KiB: mục "đã nhớ" ngầm hiểu mức 3 nên không ghi lv; thống kê ngày chỉ giữ 120 ngày gần nhất.
+function compactSync() {
+  const lvOut = {}; for (const k in lv) if (!known.has(k) && lv[k]) lvOut[k] = lv[k];
+  const cut = new Date(); cut.setDate(cut.getDate() - 120);
+  const cutKey = dayKey(cut), dailyOut = {};
+  for (const d in daily) if (d >= cutKey) dailyOut[d] = daily[d];
+  return { keys: [...known], lv: lvOut, due, daily: dailyOut, at: knownAt };
+}
+async function pushKnown() { if (db && uid) try { await knownDoc().set(compactSync()); } catch (e) {} }
 async function pullKnown() {
   if (!db || !uid) return;
   try {
@@ -310,6 +326,7 @@ async function pullKnown() {
     if (d && Array.isArray(d.keys) && d.at > knownAt) {
       known.clear(); d.keys.forEach(k => known.add(k)); knownAt = d.at;
       lv = d.lv && typeof d.lv === "object" ? d.lv : {};
+      d.keys.forEach(k => { lv[k] = 3; });
       due = d.due && typeof d.due === "object" ? d.due : {}; daily = d.daily && typeof d.daily === "object" ? d.daily : {};
       store.set("known", [...known]); store.set("knownAt", knownAt); store.set("lv", lv); store.set("due", due); store.set("daily", daily); render();
     } else if (!d || d.at < knownAt) { if (!knownAt && known.size) knownAt = Date.now(); pushKnown(); }
@@ -503,9 +520,24 @@ const norm = t => String(t).toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").repl
 const cleanW = w => String(w).replace(/\s*\([^)]*\)/g, "").trim() || String(w);
 const shortTxt = s => String(s).length > 70 ? String(s).slice(0, 67) + "…" : String(s);
 
+// Một mục "gần giống" đáp án (cùng chữ sau khi bỏ chú thích, cùng gốc từ như project/projected, hoặc cùng nghĩa chính) thì không dùng làm lựa chọn nhiễu, vì người chơi chọn nó cũng hợp lý.
+const meanKey = o => norm(String(o.mean || "").split(/[,;(]/)[0]);
+const stemKey = o => { const w = norm(cleanW(o.w || o.name || "")); return w.length >= 5 ? w.slice(0, 5) : w; };
+function tooClose(a, b) {
+  if (a.w === undefined) return false;
+  if (norm(cleanW(a.w)) === norm(cleanW(b.w))) return true;
+  if (stemKey(a) === stemKey(b) && norm(cleanW(a.w)).length >= 5) return true;
+  const ma = meanKey(a), mb = meanKey(b); return !!ma && !!mb && ma === mb;
+}
 function distractors(all, it, field, n) {
   const seen = new Set([norm(it[field])]), out = [];
-  for (const o of shuf(all)) { if (o.key === it.key || !o[field]) continue; const k = norm(o[field]); if (seen.has(k)) continue; seen.add(k); out.push(o); if (out.length >= n) break; }
+  for (const o of shuf(all)) {
+    if (o.key === it.key || !o[field]) continue;
+    const k = norm(o[field]); if (seen.has(k) || tooClose(it, o)) continue;
+    seen.add(k); out.push(o); if (out.length >= n) break;
+  }
+  // Thiếu nhiễu (ít mục) thì nới điều kiện cho đủ lựa chọn.
+  for (const o of shuf(all)) { if (out.length >= Math.min(n, all.length - 1)) break; if (o.key === it.key || !o[field] || out.includes(o)) continue; const k = norm(o[field]); if (seen.has(k)) continue; seen.add(k); out.push(o); }
   return out;
 }
 function mkChoices(it, all, field, text, sub) {
@@ -551,7 +583,9 @@ function startGame(kind) {
   const done = shuf(all.filter(i => known.has(i.key) && !pk.has(i.key)));
   const nDone = picked.length < 8 ? Math.min(done.length, 10 - picked.length) : Math.min(done.length, 10 - picked.length, 2);
   const picks = shuf([...picked, ...done.slice(0, nDone)]);
-  state.game = { kind, lang, all, qs: picks.map(it => makeQ(kind, it, all, lang)), i: 0, score: 0, streak: 0, best: 0, ans: null, missed: [], newKnown: [], demoted: [], retried: false, done: false };
+  const qs = picks.map(it => { try { return makeQ(kind, it, all, lang); } catch (e) { return null; } }).filter(Boolean);
+  if (qs.length < 1) { state.game = { kind, tooFew: true }; return; }
+  state.game = { kind, lang, all, qs, i: 0, score: 0, streak: 0, best: 0, ans: null, missed: [], newKnown: [], demoted: [], retried: false, done: false };
 }
 // Đúng: +1 (câu trắc nghiệm) hoặc +2 (gõ từ, sắp xếp câu). Đạt 3 thì tự chuyển sang "Đã nhớ". Sai: về 0, và nếu đang "Đã nhớ" thì quay lại danh sách cần nhớ.
 function gradeAnswer(q, ok) {
@@ -589,7 +623,8 @@ function gameChoose(i) { const q = state.game.qs[state.game.i]; gameAnswer(i ===
 function gameCheckType() {
   const q = state.game.qs[state.game.i], el = document.getElementById("gtype"), v = el ? el.value.trim() : "";
   if (!v) return;
-  gameAnswer(new RegExp("^" + wordRegex(q.it.w, "en").source + "$", "iu").test(v), v);
+  const g = state.game, same = [q.it, ...g.all.filter(o => o.key !== q.it.key && meanKey(o) && meanKey(o) === meanKey(q.it))];
+  gameAnswer(same.some(o => { try { return new RegExp("^" + wordRegex(o.w, "en").source + "$", "iu").test(v); } catch (e) { return false; } }), v);
 }
 function gamePick(idx) {
   const g = state.game, q = g.qs[g.i]; if (g.ans || q.picked.includes(idx)) return;
@@ -1128,7 +1163,24 @@ let rs = store.get("rs", 1);
 function applyRs() { document.documentElement.style.setProperty("--rs", rs); }
 applyRs();
 
+// Hiện lỗi chạy ngầm (nếu có) thành một dòng ở đầu màn hình để biết nguyên nhân thay vì chỉ thấy "bị hỏng".
+function showErr(err) {
+  try {
+    const msg = String((err && (err.message || err.reason && err.reason.message)) || err || "lỗi không rõ");
+    if (/ResizeObserver|Script error\.?$/.test(msg)) return;
+    let el = document.getElementById("errbar");
+    if (!el) { el = document.createElement("div"); el.id = "errbar"; el.setAttribute("role", "alert"); document.body.appendChild(el); }
+    el.innerHTML = `<span>Lỗi: ${esc(msg.slice(0, 160))}</span><button id="errClose" aria-label="Đóng">×</button>`; el.hidden = false;
+  } catch (e) {}
+}
+addEventListener("error", e => showErr(e.error || e.message));
+addEventListener("unhandledrejection", e => showErr(e.reason));
+const errorPanel = err => `<div class="status err" role="alert"><b>Có lỗi khi hiển thị.</b> Bạn chụp màn hình dòng này gửi lại để tôi sửa:<br><code>${esc(String(err && err.message || err))}</code><div class="row" style="margin-top:8px"><button id="errRetry">Thử lại</button></div></div>`;
 function render() {
+  try { renderCore(); }
+  catch (err) { if (state.game) state.game = null; const v = document.getElementById("view"); if (v) v.innerHTML = errorPanel(err); showErr(err); }
+}
+function renderCore() {
   BOOKS = allBooks();
   const fab = document.getElementById("fab");
   if (fab) fab.hidden = !(tab() === "ban-dich" && !state.rdOpen && !state.pop && !state.tap && book() && book().pages.length > 1);
@@ -1136,7 +1188,13 @@ function render() {
   if (state.rdOpen) updateReader();
   renderHeader();
   const t = tab(), v = document.getElementById("view");
-  v.innerHTML = (t === "ban-dich" ? renderReading() + renderSheet() + renderTapSheet() : t === "them-trang" ? renderAdd() + renderSheet() + renderTapSheet() : renderStudy(t));
+  try {
+    v.innerHTML = (t === "ban-dich" ? renderReading() + renderSheet() + renderTapSheet() : t === "them-trang" ? renderAdd() + renderSheet() + renderTapSheet() : renderStudy(t));
+  } catch (err) {
+    if (state.game && String(err && err.message).length) state.game = null;
+    v.innerHTML = errorPanel(err);
+    showErr(err);
+  }
   refreshListen();
   const gt = document.getElementById("gtype"); if (gt && !gt.disabled) gt.focus();
   const d = document.getElementById("draft");
@@ -1150,7 +1208,7 @@ function render() {
   const no = document.getElementById("newOrig"); if (no) no.oninput = () => { state.newOrig = no.value; renderHeader(); };
   const na = document.getElementById("newAuthor"); if (na) na.oninput = () => { state.newAuthor = na.value; renderHeader(); };
   const pl = document.getElementById("pageLabel"); if (pl) pl.oninput = () => { state.pageLabel = pl.value; };
-  const bp = document.getElementById("bookPick"); if (bp) bp.onchange = () => { state.book = bp.value; state.result = null; state.dup = null; state.msg = ""; if (bp.value !== "__new") store.set("book", bp.value); render(); };
+  const bp = document.getElementById("bookPick"); if (bp) bp.onchange = () => { state.book = bp.value; state.game = null; state.result = null; state.dup = null; state.msg = ""; if (bp.value !== "__new") store.set("book", bp.value); render(); };
   const img = document.getElementById("img"); if (img) img.onchange = () => { if (img.files[0]) { state.file = img.files[0]; render(); } };
   const th = document.getElementById("thumb"); if (th && state.file) th.src = URL.createObjectURL(state.file);
   const q = document.getElementById("q");
@@ -1210,6 +1268,8 @@ document.addEventListener("click", e => {
   else if (b.id === "lookupGo") return void lookupWord();
   else if (b.id === "lookupAdd") return void lookupAdd();
   else if (b.dataset.delword) { db.collection("words").doc(b.dataset.delword).delete().catch(() => {}); return; }
+  else if (b.id === "errClose") { const el = document.getElementById("errbar"); if (el) el.hidden = true; return; }
+  else if (b.id === "errRetry") { state.game = null; state.deck = null; }
   else if (b.id === "reviewNow") { state.mode[t] = "game"; state.game = null; state.deck = null; }
   else if (b.id === "grestart") startGame(t);
   else if (b.dataset.mode) { state.mode[t] = b.dataset.mode; state.deck = null; state.flipped = false; state.game = null; }
@@ -1236,7 +1296,7 @@ document.addEventListener("keydown", e => {
   if (e.key === "Escape" && (state.pop || state.tap)) { state.pop = null; state.tap = null; return render(); }
   if (e.target.classList && e.target.classList.contains("nw") && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.target.click(); return; } if (e.target.id === "card" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); state.flipped = !state.flipped; render(); } });
 document.getElementById("bookSel").onchange = e => {
-  state.book = e.target.value; state.deck = null; state.pop = null; state.result = null; state.dup = null; state.msg = "";
+  state.book = e.target.value; state.deck = null; state.game = null; state.pop = null; state.tap = null; state.result = null; state.dup = null; state.msg = "";
   if (state.book === "__new") { if (location.hash !== "#them-trang") return void (location.hash = "#them-trang"); }
   else store.set("book", state.book);
   render();

@@ -61,3 +61,7 @@ hay gặp x mức nhớ còn thiếu. Vì vậy trường `w` của từ vựng 
 ## Chạm vào từ để tra
 Ở tab Bản dịch, tab + Thêm và chế độ Kindle (bật nút "Chạm để tra"), chạm vào bất kỳ từ nào trong bản gốc (đoạn `p[lang]`) thì phần mềm xác định từ và câu chứa nó:
 nếu từ hoặc cụm đó đã có trong danh sách từ vựng (kể cả đã nhớ) thì mở giải nghĩa có sẵn, nếu chưa thì hỏi Claude nghĩa theo ngữ cảnh câu (kết quả được nhớ tạm trong phiên) và cho thêm vào collection `words` như mục "Tra thêm từ khác".
+
+## Chẩn đoán lỗi
+Khi gặp lỗi lúc hiển thị, phần mềm hiện khung "Có lỗi khi hiển thị" kèm nội dung lỗi và nút "Thử lại"; lỗi chạy ngầm hiện thành một dòng "Lỗi: …" ở đầu màn hình. Nếu người dùng báo "bị hỏng" mà chưa có ảnh chụp, hãy xin họ chụp màn hình dòng này.
+Lựa chọn nhiễu trong trò chơi bỏ các mục cùng chữ, cùng gốc từ hoặc cùng nghĩa chính với đáp án; câu gõ từ chấp nhận từ khác có cùng nghĩa chính. Tài liệu đồng bộ `known` ghi gọn (mục đã nhớ ngầm hiểu mức 3, thống kê ngày giữ 120 ngày) để dưới 256 KiB.

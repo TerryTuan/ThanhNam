@@ -294,6 +294,9 @@ function filtered(kind) {
 let uid = null, knownAt = store.get("knownAt", 0), knownTimer = null;
 const knownDoc = () => db.collection("data/users/" + uid).doc("known");
 const DAY = 864e5;
+// Dữ liệu đọc từ claude.ai là bản chỉ-đọc (đóng băng): ghi vào đó bị bỏ qua âm thầm và sinh lỗi "undefined is not an object". Luôn sao chép sang bản sửa được.
+const thaw = o => JSON.parse(JSON.stringify(o && typeof o === "object" ? o : {}));
+function ensureMutable() { if (Object.isFrozen(lv)) lv = thaw(lv); if (Object.isFrozen(due)) due = thaw(due); if (Object.isFrozen(daily)) daily = thaw(daily); }
 const dayKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 // Chuỗi ngày học liên tiếp; hôm nay chưa học thì tính từ hôm qua để chưa mất chuỗi.
 function streakDays() {
@@ -307,6 +310,7 @@ function touchKnown() {
   clearTimeout(knownTimer); knownTimer = setTimeout(pushKnown, 700);
 }
 function toggleKnown(key, v) {
+  ensureMutable();
   if (v) { known.add(key); lv[key] = 3; due[key] = Date.now() + 7 * DAY; } else { known.delete(key); delete lv[key]; delete due[key]; }
   touchKnown();
 }
@@ -325,9 +329,8 @@ async function pullKnown() {
     const snap = await knownDoc().get(), d = snap.exists ? snap.data() : null;
     if (d && Array.isArray(d.keys) && d.at > knownAt) {
       known.clear(); d.keys.forEach(k => known.add(k)); knownAt = d.at;
-      lv = d.lv && typeof d.lv === "object" ? d.lv : {};
-      d.keys.forEach(k => { lv[k] = 3; });
-      due = d.due && typeof d.due === "object" ? d.due : {}; daily = d.daily && typeof d.daily === "object" ? d.daily : {};
+      lv = thaw(d.lv); d.keys.forEach(k => { lv[k] = 3; });
+      due = thaw(d.due); daily = thaw(d.daily);
       store.set("known", [...known]); store.set("knownAt", knownAt); store.set("lv", lv); store.set("due", due); store.set("daily", daily); render();
     } else if (!d || d.at < knownAt) { if (!knownAt && known.size) knownAt = Date.now(); pushKnown(); }
   } catch (e) {}
@@ -589,6 +592,7 @@ function startGame(kind) {
 }
 // Đúng: +1 (câu trắc nghiệm) hoặc +2 (gõ từ, sắp xếp câu). Đạt 3 thì tự chuyển sang "Đã nhớ". Sai: về 0, và nếu đang "Đã nhớ" thì quay lại danh sách cần nhớ.
 function gradeAnswer(q, ok) {
+  ensureMutable();
   const g = state.game, k = q.it.key; let note = "";
   if (ok) {
     lv[k] = Math.min(3, lvOf(k) + (q.type === "type" || q.type === "order" ? 2 : 1));

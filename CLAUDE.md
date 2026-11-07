@@ -65,3 +65,7 @@ nếu từ hoặc cụm đó đã có trong danh sách từ vựng (kể cả đ
 ## Chẩn đoán lỗi
 Khi gặp lỗi lúc hiển thị, phần mềm hiện khung "Có lỗi khi hiển thị" kèm nội dung lỗi và nút "Thử lại"; lỗi chạy ngầm hiện thành một dòng "Lỗi: …" ở đầu màn hình. Nếu người dùng báo "bị hỏng" mà chưa có ảnh chụp, hãy xin họ chụp màn hình dòng này.
 Lựa chọn nhiễu trong trò chơi bỏ các mục cùng chữ, cùng gốc từ hoặc cùng nghĩa chính với đáp án; câu gõ từ chấp nhận từ khác có cùng nghĩa chính. Tài liệu đồng bộ `known` ghi gọn (mục đã nhớ ngầm hiểu mức 3, thống kê ngày giữ 120 ngày) để dưới 256 KiB.
+
+## Dữ liệu từ claude.ai là chỉ-đọc
+Dữ liệu đọc từ db (`snap.data()`, tài liệu `known` với `lv`, `due`, `daily`, các trang) bị đóng băng: gán vào đó bị bỏ qua âm thầm và gây lỗi kiểu "undefined is not an object (evaluating 'daily[dk].n')".
+Luôn sao chép (hàm `thaw`) trước khi sửa; `ensureMutable()` chạy trước mọi lần ghi vào `lv`, `due`, `daily`. Khi thử bằng giả lập, tài liệu `known` trả về phải được `Object.freeze` sâu như trình xem thật.

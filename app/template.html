@@ -202,7 +202,7 @@ details.hard li { margin-bottom: 8px; }
       <a href="#tu-vung" data-tab="tu-vung">Từ vựng<span class="n" id="nVocab">0</span></a>
       <a href="#mau-cau" data-tab="mau-cau">Mẫu câu<span class="n" id="nPat">0</span></a>
     </nav>
-    <div class="offbar" id="offbar" hidden></div>
+    <div class="offbar" id="offbar" hidden><span id="offtext"></span> <button id="importBtn" hidden>Nhập dữ liệu</button><input type="file" id="importFile" accept=".json,application/json" hidden></div>
   </div>
 </header>
 <main><div class="wrap" id="view"></div></main>
@@ -219,15 +219,22 @@ details.hard li { margin-bottom: 8px; }
 </div>
 
 <script>
-const REPO_BOOKS = /*__DATA__*/[];
+let REPO_BOOKS = /*__DATA__*/[];
 // Bản offline (xuất bằng tools/build.py --offline): không có claude.ai nên không dịch trang mới, không tra từ mới; đọc, ôn tập, trò chơi vẫn dùng được.
-const OFFLINE = /*__OFFLINE__*/false, BUILT = "/*__BUILT__*/", SEED = /*__SEED__*/null;
+// PWA = bản cài lên màn hình chính, chạy hoàn toàn offline: mã ứng dụng không chứa sách; người dùng nhập tệp dữ liệu một lần, sách và tiến độ lưu trong IndexedDB của thiết bị.
+const PWA = /*__PWA__*/false;
+const OFFLINE = /*__OFFLINE__*/false || PWA, BUILT = "/*__BUILT__*/", SEED = /*__SEED__*/null;
 let dbPages = [], dbWords = [], db = null, sample = null, isOwner = false, canImage = false;
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 };
 const state = { draft: store.get("draft", ""), pageLabel: "", file: null, busy: false, msg: "", err: false, result: null, newTitle: "", newOrig: "", newAuthor: "", confirmDel: null, book: store.get("book", REPO_BOOKS[0] && REPO_BOOKS[0].id), mode: { "tu-vung": "list", "mau-cau": "list" }, filter: "todo", sort: store.get("sort", "freq"), foldOpen: {}, game: null, q: "", deck: null, idx: 0, flipped: false, rdOpen: false, rdLookup: store.get("rdLookup", false), rdLang: store.get("rdLang", "vi"), rdSize: store.get("rdSize", 19), rdPage: 0, rdPages: 1, autoGo: store.get("autoGo", true), pasteHint: false, view: store.get("view", "both"), pop: null };
+const idb = {
+  open() { return new Promise((res, rej) => { const r = indexedDB.open("so-tay", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  async get(k) { const d = await this.open(); return new Promise((res, rej) => { const t = d.transaction("kv").objectStore("kv").get(k); t.onsuccess = () => res(t.result); t.onerror = () => rej(t.error); }); },
+  async set(k, v) { const d = await this.open(); return new Promise((res, rej) => { const tx = d.transaction("kv", "readwrite"); tx.objectStore("kv").put(v, k); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
+};
 if (OFFLINE && SEED && !store.get("seeded", false)) {
   const keys = SEED.keys || [], l = { ...(SEED.lv || {}) }; keys.forEach(k => { l[k] = 3; });
   store.set("known", keys); store.set("lv", l); store.set("due", SEED.due || {}); store.set("daily", SEED.daily || {}); store.set("knownAt", SEED.at || 0); store.set("seeded", true);
@@ -408,7 +415,12 @@ function speak(text) {
 function renderHeader() {
   const b = book();
   const adding = state.book === "__new";
-  const ob = document.getElementById("offbar"); if (ob) { ob.hidden = !OFFLINE; if (OFFLINE) ob.textContent = `Bản offline (xuất ${BUILT}): đọc, ôn tập và trò chơi dùng được; dịch trang mới và tra từ mới cần mở bản trên claude.ai. Tiến độ học lưu ngay trên thiết bị này.`; }
+  const ob = document.getElementById("offbar"); if (ob) {
+    ob.hidden = !OFFLINE;
+    const ot = document.getElementById("offtext"), ib = document.getElementById("importBtn");
+    if (ot) ot.textContent = state.notice || (PWA ? "Ứng dụng offline: sách và tiến độ học lưu ngay trên thiết bị này." : `Bản offline (xuất ${BUILT}): đọc, ôn tập và trò chơi dùng được; dịch trang mới và tra từ mới cần mở bản trên claude.ai. Tiến độ học lưu ngay trên thiết bị này.`);
+    if (ib) ib.hidden = !PWA;
+  }
   const addTabLink = document.querySelector('nav.tabs a[data-tab="them-trang"]'); if (addTabLink) addTabLink.hidden = OFFLINE;
   document.getElementById("bookTitle").textContent = adding ? (state.newTitle.trim() || "Sách mới") : b ? b.title : "Sổ tay đọc sách";
   document.getElementById("bookOrig").textContent = adding ? [state.newOrig, state.newAuthor].map(x => x.trim()).filter(Boolean).join(" · ") : b ? [b.original, b.author].filter(Boolean).join(" · ") : "";
@@ -486,7 +498,7 @@ function renderSheet(spacer = true) {
 
 function renderReading() {
   const b = book();
-  if (!b || !b.pages.length) return `<p class="empty">Chưa có trang nào. Dán một trang sách cho Claude để bắt đầu.</p>`;
+  if (!b || !b.pages.length) return PWA ? `<p class="empty">Chưa có sách trong ứng dụng.<br>Bấm <b>“Nhập dữ liệu”</b> ở trên và chọn tệp <b>sach-du-lieu.json</b> (chỉ cần làm một lần).</p>` : `<p class="empty">Chưa có trang nào. Dán một trang sách cho Claude để bắt đầu.</p>`;
   const vocab = items("tu-vung"), vw = state.view, left = vocab.filter(v => !known.has(v.key)).length;
   const jump = b.pages.length > 3 ? `<select id="jump" aria-label="Đi tới trang"><option value="">Đi tới trang…</option>${b.pages.map(p => `<option value="${p.n}">Trang ${pad(p.n)}</option>`).join("")}</select>` : "";
   return ttsSettings() + `<div class="toolbar"><button class="primary" id="openReader">Đọc kiểu Kindle</button>${b.pages.length > 1 ? `<button data-viewpage="${b.pages[b.pages.length - 1].n}">Trang mới nhất</button>` : ""}${jump}<span class="seg" role="group" aria-label="Hiển thị">
@@ -800,7 +812,7 @@ function tapAt(e, pEl) {
   const key = w.word.toLowerCase() + "|" + sentence.slice(0, 80);
   if (tapCache[key]) { state.tap = { word: w.word, res: tapCache[key] }; refreshSheets(); return true; }
   state.tap = { word: w.word, busy: true }; refreshSheets();
-  if (!sample) { state.tap = { word: w.word, msg: OFFLINE ? "Bản offline chỉ tra được các từ đã có trong danh sách. Mở bản trên claude.ai để tra từ mới." : "Cần mở phần mềm trong claude.ai và đăng nhập để tra từ mới." }; refreshSheets(); return true; }
+  if (!sample) { state.tap = { word: w.word, msg: OFFLINE ? "Bản offline chỉ tra được các từ đã có trong danh sách. Cần mạng và bản trên claude.ai để tra từ mới." : "Cần mở phần mềm trong claude.ai và đăng nhập để tra từ mới." }; refreshSheets(); return true; }
   const mine = state.tap;
   sample.json(`Bạn là gia sư cho người Việt có trình độ IELTS 6.0 (tiếng Anh) hoặc HSK 4 (tiếng Trung). Người học đang đọc cuốn "${b.title}" và vừa chạm vào ${b.lang === "zh" ? "chữ" : "từ"} "${w.word}" trong câu sau:
 """${sentence}"""
@@ -1260,6 +1272,7 @@ document.addEventListener("click", e => {
   if (b.dataset.explain) return explain(dbPages.find(p => p.dbId === b.dataset.explain));
   if (b.id === "retryAnalyze") { const bk = book(); return analyze(state.result || (bk && bk.pages[bk.pages.length - 1])); }
   if (b.id === "fsUp" || b.id === "fsDown") { rs = Math.round(Math.max(0.8, Math.min(1.8, rs + (b.id === "fsUp" ? 0.1 : -0.1))) * 10) / 10; store.set("rs", rs); return applyRs(); }
+  if (b.id === "importBtn") return void document.getElementById("importFile").click();
   if (b.id === "openReader") return openReader();
   if (b.id === "toTop") return window.scrollTo(0, 0);
   if (b.id === "toEnd") { const bk = book(), last = bk && bk.pages[bk.pages.length - 1], el = last && document.getElementById("p-" + last.n); return el ? el.scrollIntoView({ block: "start" }) : undefined; }
@@ -1344,6 +1357,33 @@ document.addEventListener("paste", e => {
   if (db) db.collection("pages").onSnapshot(snap => { dbPages = snap.docs.map(x => ({ ...x.data(), dbId: x.id })); render(); }, () => {});
   render();
 })();
+// ---- Bản PWA: nạp sách từ IndexedDB, nhập tệp dữ liệu, đăng ký service worker ----
+async function importData(file) {
+  try {
+    const d = JSON.parse(await file.text());
+    const books = Array.isArray(d) ? d : d.books;
+    if (!Array.isArray(books) || !books.length || !books.every(b => b && typeof b.id === "string" && Array.isArray(b.pages))) throw new Error("Tệp không đúng định dạng sổ tay");
+    await idb.set("books", books); REPO_BOOKS = books;
+    let note = `Đã nhập ${books.length} sách, ${books.reduce((n, b) => n + b.pages.length, 0)} trang.`;
+    const pr = d.progress;
+    if (pr && typeof pr === "object") {
+      if (!known.size && !Object.keys(lv).length) {
+        known.clear(); (pr.keys || []).forEach(k => known.add(k));
+        lv = thaw(pr.lv); (pr.keys || []).forEach(k => { lv[k] = 3; }); due = thaw(pr.due); daily = thaw(pr.daily);
+        touchKnown(); note += " Đã mang theo tiến độ học.";
+      } else note += " Giữ nguyên tiến độ học đang có trên máy.";
+    }
+    if (!REPO_BOOKS.find(x => x.id === state.book)) { state.book = REPO_BOOKS[0].id; store.set("book", state.book); }
+    state.notice = note; state.game = null; state.deck = null; render();
+    setTimeout(() => { state.notice = ""; render(); }, 6000);
+  } catch (e) { state.notice = "Không nhập được: " + (e && e.message ? e.message : "lỗi không rõ"); render(); }
+}
+if (PWA) {
+  document.getElementById("importFile").addEventListener("change", e => { const f = e.target.files[0]; if (f) importData(f); e.target.value = ""; });
+  idb.get("books").then(b => { if (Array.isArray(b) && b.length) { REPO_BOOKS = b; if (!REPO_BOOKS.find(x => x.id === state.book)) state.book = REPO_BOOKS[0].id; render(); } }).catch(() => {});
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(() => {});
+}
 addEventListener("hashchange", () => { if (tab() !== "them-trang") state.focusAdd = false; stopSpeech(); state.flipped = false; state.pop = null; state.tap = null; store.set("tab", tab()); render(); window.scrollTo(0, 0); });
 if (!location.hash) { const t = store.get("tab", ""); if (["them-trang", "tu-vung", "mau-cau"].includes(t)) location.hash = "#" + t; }
 if (tab() === "them-trang") state.focusAdd = true;

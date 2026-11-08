@@ -78,3 +78,12 @@ Khi người dùng nhắc "xuất offline": đồng bộ db vào repo trước, 
 ## Xuất EPUB (đọc offline trên iPhone)
 `python3 tools/export_epub.py --seed <known.json>` tạo `app/<id-sách>.epub` cho từng cuốn: bản gốc và bản dịch xen kẽ, từ mới chưa nhớ được tô màu và chạm vào hiện nghĩa dạng chú thích bật lên (Apple Books, Kobo...), cuối mỗi trang có từ vựng, mẫu câu, câu khó và ý nghĩa sâu xa.
 Tệp `.epub` bị bỏ qua trong git. Khi người dùng nhắc "xuất EPUB" hoặc cần đọc khi không có mạng: đồng bộ db vào repo, đọc `data/users/me/known` làm `--seed`, chạy lệnh trên rồi gửi tệp bằng SendUserFile (display "attach").
+
+## Ứng dụng cài lên màn hình chính (PWA, chạy offline)
+`python3 tools/build.py --pwa` tạo thư mục `docs/` (index.html, sw.js, manifest, biểu tượng): ứng dụng đầy đủ tính năng ôn tập, KHÔNG chứa nội dung sách. Phục vụ qua HTTPS (ví dụ GitHub Pages) thì mở bằng Safari, "Thêm vào Màn hình chính", rồi dùng offline như Kindle.
+Dữ liệu sách và tiến độ nhập một lần từ tệp `sach-du-lieu.json` (`python3 tools/build.py --data-file app/sach-du-lieu.json --seed <known.json>`, tệp này chứa nguyên văn sách nên bị bỏ qua trong git và chỉ gửi riêng cho người dùng bằng SendUserFile) và lưu trong IndexedDB của thiết bị.
+`python3 tools/build.py --offline` tạo tệp HTML tự chứa (đã gói đủ doctype và viewport để mở trên điện thoại).
+
+## CẢNH BÁO quyền riêng tư
+Ngày 2026-11-08 kiểm tra thấy repo `TerryTuan/ThanhNam` đang CÔNG KHAI nhưng chứa nguyên văn các trang sách người dùng đã dán (`sach/*/du-lieu.json`, `trang-NNN.md`...). Cho đến khi người dùng chuyển repo sang riêng tư hoặc quyết định khác:
+không đưa thêm nguyên văn sách vào repo (khi "đồng bộ", chỉ chép bản dịch, từ vựng, mẫu câu nếu người dùng đồng ý), và không đưa nguyên văn sách vào bất kỳ thư mục nào được phục vụ công khai (như `docs/`).

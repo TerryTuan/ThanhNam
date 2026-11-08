@@ -74,3 +74,7 @@ Luôn sao chép (hàm `thaw`) trước khi sửa; `ensureMutable()` chạy trư�
 `python3 tools/build.py --offline --seed <known.json>` tạo thêm `app/so-tay-offline.html`: một tệp HTML tự chứa (dữ liệu các sách từ `sach/*/du-lieu.json`, không dùng phông Google), mở được không cần mạng.
 Bản offline đọc, ôn tập, chơi trò chơi và xem Kindle được; không có tab "+ Thêm", không dịch trang mới, chỉ tra được từ đã có trong danh sách. Tệp này được bỏ qua trong git (`.gitignore`).
 Khi người dùng nhắc "xuất offline": đồng bộ db vào repo trước, đọc `data/users/me/known` bằng ArtifactData (out_dir) để làm `--seed` mang theo tiến độ học, build rồi gửi tệp bằng SendUserFile.
+
+## Xuất EPUB (đọc offline trên iPhone)
+`python3 tools/export_epub.py --seed <known.json>` tạo `app/<id-sách>.epub` cho từng cuốn: bản gốc và bản dịch xen kẽ, từ mới chưa nhớ được tô màu và chạm vào hiện nghĩa dạng chú thích bật lên (Apple Books, Kobo...), cuối mỗi trang có từ vựng, mẫu câu, câu khó và ý nghĩa sâu xa.
+Tệp `.epub` bị bỏ qua trong git. Khi người dùng nhắc "xuất EPUB" hoặc cần đọc khi không có mạng: đồng bộ db vào repo, đọc `data/users/me/known` làm `--seed`, chạy lệnh trên rồi gửi tệp bằng SendUserFile (display "attach").

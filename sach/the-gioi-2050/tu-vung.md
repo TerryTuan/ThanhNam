@@ -559,3 +559,176 @@
 | thrice | ba lần | 053 |
 | bristle | dựng lông, hằm hè; (bristling with) đầy rẫy, tua tủa | 053 |
 | geologically | về mặt địa chất | 053 |
+| domain | lãnh địa, phạm vi hoạt động riêng của một nhóm | 056 |
+| fancy | cầu kỳ, phức tạp, đắt đỏ | 056 |
+| profound | sâu sắc, to lớn | 056 |
+| restriction | sự hạn chế | 056 |
+| impose upon | áp đặt lên | 056 |
+| ice pack | khối băng trôi, vùng băng dày | 056 |
+| poke and probe | dò dẫm, thăm dò | 056 |
+| periphery | vùng rìa, ngoại vi | 056 |
+| confine | giới hạn, giam trong phạm vi | 056 |
+| pour in | ùa vào, đổ vào ồ ạt | 056 |
+| penetrate | xuyên qua, thâm nhập (ở đây: tàu/băng/nước đi sâu vào vùng nào đó) | 057 |
+| ice-free | không còn băng, hết băng | 057 |
+| thrilled | hào hứng, phấn khích | 057 |
+| operator | nhà khai thác, đơn vị vận hành | 057 |
+| cargo | hàng hóa chở bằng tàu, máy bay | 057 |
+| the bulk of | phần lớn của | 057 |
+| exploration | sự thăm dò, khảo sát | 057 |
+| be kind enough to | vui lòng, có lòng làm gì | 057 |
+| Syncrolift | hệ thống nâng tàu: bệ nâng đưa tàu lên khỏi mặt nước để sửa chữa hoặc cất giữ | 058 |
+| vessel | tàu thuyền (cách nói trang trọng) | 058 |
+| capitalize on | tận dụng (cơ hội, lợi thế) để thu lợi | 058 |
+| shipping season | mùa vận chuyển (khoảng thời gian tàu có thể hoạt động) | 058 |
+| load up | chất đầy hàng lên | 058 |
+| move out | rời đi, xuất phát | 058 |
+| in operation | đang hoạt động | 058 |
+| bounce (an idea) | thử đưa ý tưởng ra để lấy ý kiến người khác | 058 |
+| materialize | trở thành hiện thực, xảy ra thực sự | 059 |
+| spell (sth) | đồng nghĩa với, báo hiệu (điều gì, thường là xấu) | 059 |
+| multiyear | kéo dài nhiều năm (băng đã tồn tại qua nhiều mùa hè) | 059 |
+| obstructing | gây cản trở, chặn đường | 059 |
+| brine | nước muối đặc | 059 |
+| inclusion | phần vật chất bị bao bên trong một vật khác | 059 |
+| gore | húc, đâm thủng (bằng sừng hoặc vật nhọn) | 059 |
+| ice-strengthened hull | thân tàu được gia cường để chịu băng | 059 |
+| impassable | không thể đi qua được | 059 |
+| foil | làm thất bại, cản trở | 060 |
+| multiyear ice | băng nhiều năm, lớp băng sống sót qua ít nhất một mùa hè tan chảy | 060 |
+| go extinct | tuyệt chủng, biến mất hoàn toàn | 060 |
+| fortified | được gia cố, tăng cường | 060 |
+| hull | thân tàu | 060 |
+| regulatory | thuộc quy định, quản lý | 060 |
+| standpoint | quan điểm, góc độ | 060 |
+| viable | khả thi | 060 |
+| feasible | có thể thực hiện được | 060 |
+| Dream on | cứ mơ đi (ý nói điều đó khó xảy ra) | 060 |
+| pour through | đổ dồn qua, chảy ồ ạt qua | 060 |
+| escort | sự hộ tống, đoàn hộ tống | 061 |
+| lingering | còn sót lại, kéo dài dai dẳng | 061 |
+| calve | (sông băng) vỡ ra, tách ra thành tảng băng trôi | 061 |
+| glacier | sông băng, băng hà | 061 |
+| scorched | bị thiêu cháy xém, khô cháy | 061 |
+| superimposed | chồng lên, phủ lên trên | 061 |
+| variability | sự biến động, tính thay đổi | 061 |
+| certitude | sự chắc chắn tuyệt đối | 061 |
+| maritime | thuộc hàng hải, biển | 061 |
+| emerging regulatory framework | khung quy định đang hình thành | 061 |
+| single-hulled | có thân tàu đơn (một lớp vỏ) | 061 |
+| liability | trách nhiệm pháp lý (phải bồi thường) | 062 |
+| reaffirm | tái khẳng định, khẳng định lại | 062 |
+| strait | eo biển | 062 |
+| transnational | xuyên quốc gia | 062 |
+| profitability | khả năng sinh lời | 062 |
+| hum | hoạt động nhộn nhịp, vận hành đều đặn (nghĩa bóng) | 062 |
+| doubtless | chắc chắn, không còn nghi ngờ | 062 |
+| divert | chuyển hướng | 062 |
+| envision | hình dung, tưởng tượng (về tương lai) | 062 |
+| tightly scheduled | có lịch trình chặt chẽ | 062 |
+| tug | tàu kéo, tàu lai dắt | 063 |
+| bulk carrier | tàu chở hàng rời (quặng, ngũ cốc, than...) | 063 |
+| haul out | kéo, vận chuyển ra khỏi nơi khai thác | 063 |
+| buzz | tấp nập, nhộn nhịp qua lại (nghĩa bóng) | 063 |
+| intensify | tăng cường, gia tăng mạnh | 063 |
+| outfit | đơn vị, công ty, tổ chức (nghĩa thông tục) | 063 |
+| wellhead | đầu giếng (thiết bị ở miệng giếng khai thác dầu khí) | 064 |
+| liquefied | được hóa lỏng | 064 |
+| poised to | sẵn sàng, chuẩn bị làm gì | 064 |
+| deposit | mỏ, trữ lượng khoáng sản | 064 |
+| qualified guess | dự đoán có cơ sở, có cân nhắc | 064 |
+| sleeper | ngựa ô, thứ ít được chú ý nhưng có thể thành công bất ngờ | 064 |
+| bear watching | đáng được theo dõi sát | 064 |
+| milling around | đi lại loanh quanh không mục đích, lảng vảng | 065 |
+| dash | chạy vội, lao đi rất nhanh | 065 |
+| scoop up | nhanh tay giành lấy, chộp được | 065 |
+| beat out | vượt lên trước, giành phần hơn so với ai | 065 |
+| comrade | đồng đội, đồng chí (người cùng chung nhiệm vụ) | 065 |
+| stranded | bị mắc kẹt, không thể đi tiếp | 065 |
+| descend on | đổ xô đến, ập đến (thường với số đông) | 065 |
+| feast on | ăn thỏa thích, ăn no nê | 065 |
+| capelin | cá capelin, loài cá nhỏ vùng biển lạnh, là thức ăn của cá voi, chim biển | 065 |
+| boil | cảnh nước sôi sục, xáo động (do nhiều con vật quẫy đạp) | 066 |
+| calf (calves) | con non của cá voi, bò, hươu... | 066 |
+| deepwater | (thuộc) nước sâu, cho tàu lớn cập bến | 066 |
+| seaport | cảng biển | 066 |
+| durum | lúa mì cứng (dùng làm mì ống) | 066 |
+| flax | cây/hạt lanh | 066 |
+| prairie | đồng cỏ rộng lớn ở Bắc Mỹ | 066 |
+| spur line | tuyến đường sắt nhánh nối với tuyến chính | 066 |
+| pittance | khoản tiền rất nhỏ, rẻ mạt | 066 |
+| privately held | thuộc sở hữu tư nhân, không niêm yết công khai | 066 |
+| take over | tiếp quản, nắm quyền kiểm soát | 066 |
+| perception | nhận định, cách nhìn nhận (của số đông) | 067 |
+| facility | cơ sở, cơ sở vật chất | 067 |
+| hopper | toa phễu (toa tàu chở hàng rời như ngũ cốc) | 067 |
+| unreliable | không đáng tin cậy | 067 |
+| ubiquitous | có mặt khắp nơi | 067 |
+| infrastructure | hạ tầng | 067 |
+| pipeline | đường ống dẫn (dầu, khí) | 067 |
+| pilings | cọc, cột trụ đóng xuống đất để đỡ công trình | 068 |
+| perch | đặt ở vị trí cao, đậu trên | 068 |
+| insulating | cách nhiệt | 068 |
+| rupture | vỡ, nứt toạc | 068 |
+| substrate | lớp nền bên dưới | 068 |
+| bedrock | đá gốc, tầng đá nền | 068 |
+| peat | than bùn | 068 |
+| slump | sụt xuống, lún xuống | 068 |
+| buckle | oằn, cong vênh do áp lực hoặc nhiệt | 068 |
+| derailment | sự trật bánh (tàu hỏa) | 069 |
+| sluggardly | chậm chạp, uể oải | 069 |
+| kink | chỗ gấp khúc, chỗ cong vênh (trên đường ray) | 069 |
+| bail on | bỏ rơi, rời bỏ giữa chừng | 069 |
+| borehole | lỗ khoan (để đo, thăm dò) | 069 |
+| endgame | giai đoạn cuối, kết cục | 069 |
+| sinkhole | hố sụt | 069 |
+| dot | rải rác, điểm xuyết | 069 |
+| mutate | biến đổi, biến dạng hẳn | 070 |
+| conceivably | có thể hình dung được, về mặt lý thuyết là có thể | 070 |
+| defrost | tan băng, rã đông | 070 |
+| buckling | sự oằn, cong vênh, biến dạng do chịu lực | 070 |
+| commence | bắt đầu (trang trọng) | 070 |
+| lens (of ice) | thấu kính băng, lớp băng dạng thấu kính nằm trong đất | 070 |
+| exacerbate | làm trầm trọng thêm | 070 |
+| slumping | sự sụt, lún xuống | 070 |
+| collapse | sụp đổ (công trình bị đổ hoàn toàn) | 071 |
+| structural | thuộc kết cấu, cấu trúc của công trình | 071 |
+| engineer | thiết kế và xây dựng bằng kỹ thuật | 071 |
+| hydrological | thuộc thủy văn (liên quan đến sự vận động của nước) | 071 |
+| appealing | hấp dẫn, có sức thu hút | 071 |
+| landscape | cảnh quan, địa hình tự nhiên của một vùng | 071 |
+| challenge | thách thức, vấn đề khó khăn cần giải quyết | 071 |
+| structural integrity | tính toàn vẹn kết cấu, độ vững chắc của công trình hoặc vật liệu | 072 |
+| permanent | cố định, lâu dài (trái với tạm thời) | 072 |
+| derive from | bắt nguồn từ, dựa trên | 072 |
+| load-bearing capacity | khả năng chịu tải, sức chịu lực | 072 |
+| illustrate | minh họa, cho thấy rõ | 072 |
+| scale | quy mô, mức độ | 072 |
+| associated with | liên quan tới, gắn với, ứng với | 072 |
+| middle-of-the-road | ở mức trung bình, không cực đoan | 072 |
+| widespread | lan rộng, phổ biến trên diện rộng | 073 |
+| installation | công trình, cơ sở lắp đặt (thiết bị, máy móc lớn) | 073 |
+| hatched | được kẻ gạch chéo (trên bản đồ, hình vẽ) | 073 |
+| repercussion | hệ quả, tác động dội lại (thường tiêu cực) | 073 |
+| remote | hẻo lánh, xa xôi | 073 |
+| sucker | kẻ khờ, người dễ bị lừa; ở đây là cách chơi chữ trong tiêu đề, ám chỉ những người phụ thuộc vào đường băng | 073 |
+| transient | tạm thời, chỉ tồn tại trong thời gian ngắn | 074 |
+| boggy | lầy lội, sình lầy | 074 |
+| resupply | tiếp tế lại, cung cấp bổ sung | 074 |
+| harvest timber | khai thác gỗ | 074 |
+| economically | một cách tiết kiệm, hiệu quả về chi phí | 074 |
+| spring to action | bất ngờ bắt đầu hoạt động mạnh mẽ | 074 |
+| population density | mật độ dân số | 074 |
+| justify | biện minh, làm cho hợp lý | 074 |
+| glaze | phủ một lớp bóng (băng, men) lên bề mặt | 074 |
+| ephemeral | phù du, tồn tại chốc lát | 075 |
+| traverse | băng qua, đi ngang qua | 075 |
+| bog | đầm lầy, vùng đất lầy | 075 |
+| lucrative | sinh lợi cao, béo bở | 075 |
+| traffic-jammed | kẹt xe, chen chúc xe cộ | 075 |
+| strike | mỏ vừa được phát hiện, vỉa khoáng mới tìm thấy | 075 |
+| conglomerate | tập đoàn lớn gồm nhiều công ty | 075 |
+| multinational | đa quốc gia | 075 |
+| yield | cho ra, sản xuất ra (sản lượng) | 075 |
+| carat | carat (đơn vị khối lượng kim cương) | 075 |
+| dike back | đắp đê để ngăn nước | 075 |

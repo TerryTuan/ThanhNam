@@ -125,6 +125,9 @@ input[type="search"] { font: inherit; font-size: .88rem; padding: 6px 10px; bord
 #rdSheet .sheet { z-index: 40; }
 #reader[hidden] { display: none; }
 
+.offbar { font-size: .78rem; color: var(--muted); padding: 2px 0 8px; }
+nav.tabs a[hidden] { display: none; }
+
 /* Chạm vào từ bản gốc để tra */
 #view p[lang], #rdContent p[lang] { cursor: pointer; -webkit-tap-highlight-color: rgba(31, 111, 139, .15); }
 #rdLookup[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
@@ -199,6 +202,7 @@ details.hard li { margin-bottom: 8px; }
       <a href="#tu-vung" data-tab="tu-vung">Từ vựng<span class="n" id="nVocab">0</span></a>
       <a href="#mau-cau" data-tab="mau-cau">Mẫu câu<span class="n" id="nPat">0</span></a>
     </nav>
+    <div class="offbar" id="offbar" hidden></div>
   </div>
 </header>
 <main><div class="wrap" id="view"></div></main>
@@ -216,12 +220,18 @@ details.hard li { margin-bottom: 8px; }
 
 <script>
 const REPO_BOOKS = /*__DATA__*/[];
+// Bản offline (xuất bằng tools/build.py --offline): không có claude.ai nên không dịch trang mới, không tra từ mới; đọc, ôn tập, trò chơi vẫn dùng được.
+const OFFLINE = /*__OFFLINE__*/false, BUILT = "/*__BUILT__*/", SEED = /*__SEED__*/null;
 let dbPages = [], dbWords = [], db = null, sample = null, isOwner = false, canImage = false;
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 };
 const state = { draft: store.get("draft", ""), pageLabel: "", file: null, busy: false, msg: "", err: false, result: null, newTitle: "", newOrig: "", newAuthor: "", confirmDel: null, book: store.get("book", REPO_BOOKS[0] && REPO_BOOKS[0].id), mode: { "tu-vung": "list", "mau-cau": "list" }, filter: "todo", sort: store.get("sort", "freq"), foldOpen: {}, game: null, q: "", deck: null, idx: 0, flipped: false, rdOpen: false, rdLookup: store.get("rdLookup", false), rdLang: store.get("rdLang", "vi"), rdSize: store.get("rdSize", 19), rdPage: 0, rdPages: 1, autoGo: store.get("autoGo", true), pasteHint: false, view: store.get("view", "both"), pop: null };
+if (OFFLINE && SEED && !store.get("seeded", false)) {
+  const keys = SEED.keys || [], l = { ...(SEED.lv || {}) }; keys.forEach(k => { l[k] = 3; });
+  store.set("known", keys); store.set("lv", l); store.set("due", SEED.due || {}); store.set("daily", SEED.daily || {}); store.set("knownAt", SEED.at || 0); store.set("seeded", true);
+}
 const known = new Set(store.get("known", []));
 let lv = store.get("lv", {});
 let due = store.get("due", {}), daily = store.get("daily", {});
@@ -247,7 +257,8 @@ function allBooks() {
 }
 let BOOKS = allBooks();
 const book = () => BOOKS.find(b => b.id === state.book) || BOOKS[0];
-const tab = () => ["ban-dich", "tu-vung", "mau-cau", "them-trang"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "ban-dich";
+const TABS = OFFLINE ? ["ban-dich", "tu-vung", "mau-cau"] : ["ban-dich", "tu-vung", "mau-cau", "them-trang"];
+const tab = () => TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "ban-dich";
 
 // Độ hay gặp: từ vựng = số lần xuất hiện trong bản gốc của cả cuốn (ít nhất bằng số trang liệt kê từ đó); mẫu câu = số trang dùng mẫu đó.
 const freqCache = {};
@@ -397,6 +408,8 @@ function speak(text) {
 function renderHeader() {
   const b = book();
   const adding = state.book === "__new";
+  const ob = document.getElementById("offbar"); if (ob) { ob.hidden = !OFFLINE; if (OFFLINE) ob.textContent = `Bản offline (xuất ${BUILT}): đọc, ôn tập và trò chơi dùng được; dịch trang mới và tra từ mới cần mở bản trên claude.ai. Tiến độ học lưu ngay trên thiết bị này.`; }
+  const addTabLink = document.querySelector('nav.tabs a[data-tab="them-trang"]'); if (addTabLink) addTabLink.hidden = OFFLINE;
   document.getElementById("bookTitle").textContent = adding ? (state.newTitle.trim() || "Sách mới") : b ? b.title : "Sổ tay đọc sách";
   document.getElementById("bookOrig").textContent = adding ? [state.newOrig, state.newAuthor].map(x => x.trim()).filter(Boolean).join(" · ") : b ? [b.original, b.author].filter(Boolean).join(" · ") : "";
   const sel = document.getElementById("bookSel");
@@ -787,7 +800,7 @@ function tapAt(e, pEl) {
   const key = w.word.toLowerCase() + "|" + sentence.slice(0, 80);
   if (tapCache[key]) { state.tap = { word: w.word, res: tapCache[key] }; refreshSheets(); return true; }
   state.tap = { word: w.word, busy: true }; refreshSheets();
-  if (!sample) { state.tap = { word: w.word, msg: "Cần mở phần mềm trong claude.ai và đăng nhập để tra từ mới." }; refreshSheets(); return true; }
+  if (!sample) { state.tap = { word: w.word, msg: OFFLINE ? "Bản offline chỉ tra được các từ đã có trong danh sách. Mở bản trên claude.ai để tra từ mới." : "Cần mở phần mềm trong claude.ai và đăng nhập để tra từ mới." }; refreshSheets(); return true; }
   const mine = state.tap;
   sample.json(`Bạn là gia sư cho người Việt có trình độ IELTS 6.0 (tiếng Anh) hoặc HSK 4 (tiếng Trung). Người học đang đọc cuốn "${b.title}" và vừa chạm vào ${b.lang === "zh" ? "chữ" : "từ"} "${w.word}" trong câu sau:
 """${sentence}"""

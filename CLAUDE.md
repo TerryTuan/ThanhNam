@@ -69,3 +69,8 @@ Lựa chọn nhiễu trong trò chơi bỏ các mục cùng chữ, cùng gốc t
 ## Dữ liệu từ claude.ai là chỉ-đọc
 Dữ liệu đọc từ db (`snap.data()`, tài liệu `known` với `lv`, `due`, `daily`, các trang) bị đóng băng: gán vào đó bị bỏ qua âm thầm và gây lỗi kiểu "undefined is not an object (evaluating 'daily[dk].n')".
 Luôn sao chép (hàm `thaw`) trước khi sửa; `ensureMutable()` chạy trước mọi lần ghi vào `lv`, `due`, `daily`. Khi thử bằng giả lập, tài liệu `known` trả về phải được `Object.freeze` sâu như trình xem thật.
+
+## Xuất bản offline
+`python3 tools/build.py --offline --seed <known.json>` tạo thêm `app/so-tay-offline.html`: một tệp HTML tự chứa (dữ liệu các sách từ `sach/*/du-lieu.json`, không dùng phông Google), mở được không cần mạng.
+Bản offline đọc, ôn tập, chơi trò chơi và xem Kindle được; không có tab "+ Thêm", không dịch trang mới, chỉ tra được từ đã có trong danh sách. Tệp này được bỏ qua trong git (`.gitignore`).
+Khi người dùng nhắc "xuất offline": đồng bộ db vào repo trước, đọc `data/users/me/known` bằng ArtifactData (out_dir) để làm `--seed` mang theo tiến độ học, build rồi gửi tệp bằng SendUserFile.

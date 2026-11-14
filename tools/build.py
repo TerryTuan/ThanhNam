@@ -17,7 +17,7 @@ arg = lambda name: argv[argv.index(name) + 1] if name in argv else None
 books = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(root.glob("sach/*/du-lieu.json"))]
 js = lambda o: json.dumps(o, ensure_ascii=False).replace("</", "<\\/")
 data = js(books)
-tpl = (root / "app/template.html").read_text(encoding="utf-8")
+tpl = (root / "app/template.html").read_text(encoding="utf-8").replace("/*__FLOW__*/", (root / "tools/flow.js").read_text(encoding="utf-8"))
 seed_obj = None
 if arg("--seed"):
     d = json.loads(Path(arg("--seed")).read_text(encoding="utf-8"))

@@ -1,5 +1,5 @@
 // Service worker: lưu mã ứng dụng để mở được khi không có mạng. Dữ liệu sách nằm trong IndexedDB của thiết bị, không đi qua đây.
-const CACHE = "so-tay-20261108-238973";
+const CACHE = "so-tay-20261114-795234";
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 self.addEventListener("install", e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())));
 self.addEventListener("activate", e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));

@@ -87,3 +87,8 @@ Dữ liệu sách và tiến độ nhập một lần từ tệp `sach-du-lieu.j
 ## CẢNH BÁO quyền riêng tư
 Ngày 2026-11-08 kiểm tra thấy repo `TerryTuan/ThanhNam` đang CÔNG KHAI nhưng chứa nguyên văn các trang sách người dùng đã dán (`sach/*/du-lieu.json`, `trang-NNN.md`...). Cho đến khi người dùng chuyển repo sang riêng tư hoặc quyết định khác:
 không đưa thêm nguyên văn sách vào repo (khi "đồng bộ", chỉ chép bản dịch, từ vựng, mẫu câu nếu người dùng đồng ý), và không đưa nguyên văn sách vào bất kỳ thư mục nào được phục vụ công khai (như `docs/`).
+
+## Bản dịch tiếng Việt đọc liền mạch
+`tools/flow.js` (hàm `flowOf`) ghép bản dịch các trang thành một mạch như cuốn sách: bỏ phần hai trang chụp chồng lên nhau (phát hiện bằng bản gốc tiếng Anh rồi đối chiếu bản dịch), nối câu bị cắt đôi giữa hai trang (dấu "..."), không có tiêu đề trang.
+`build.py` nhúng nó vào ứng dụng (nút "Liền mạch" ở tab Bản dịch và chế độ tiếng Việt của Kindle). `python3 tools/export_epub_vi.py [--data <thư mục chứa sach/*/du-lieu.json>]` xuất EPUB chỉ tiếng Việt cho từng cuốn (`app/<id>-tieng-viet.epub`, bỏ qua trong git).
+Khi người dùng nhắc "xuất bản dịch tiếng Việt": lấy trang mới nhất từ db (ArtifactData, out_dir), gộp với `sach/` vào một thư mục tạm NGOÀI repo, chạy lệnh trên với `--data`, gửi tệp bằng SendUserFile; không chép nguyên văn sách mới vào repo (xem cảnh báo quyền riêng tư).

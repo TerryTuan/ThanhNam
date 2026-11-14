@@ -147,6 +147,8 @@ nav.tabs a[hidden] { display: none; }
 .rv-text { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .88rem; }
 .lookup input[type="text"] { font: inherit; flex: 1 1 160px; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
 .lookup .res { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 6px; }
+.flow p { font-family: var(--font-read); font-size: 1.15em; line-height: 1.8; margin: 0 0 1em; max-width: 65ch; text-indent: 1.4em; }
+.flow .anchor { display: block; height: 0; scroll-margin-top: 150px; }
 .dots { font-size: .7rem; letter-spacing: .12em; color: var(--accent); margin-left: 6px; white-space: nowrap; }
 .mini { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .mini > span { min-width: 0; overflow-wrap: anywhere; }
@@ -219,6 +221,8 @@ details.hard li { margin-bottom: 8px; }
 </div>
 
 <script>
+/*__FLOW__*/
+const { flowOf } = window.FLOW;
 let REPO_BOOKS = /*__DATA__*/[];
 // Bản offline (xuất bằng tools/build.py --offline): không có claude.ai nên không dịch trang mới, không tra từ mới; đọc, ôn tập, trò chơi vẫn dùng được.
 // PWA = bản cài lên màn hình chính, chạy hoàn toàn offline: mã ứng dụng không chứa sách; người dùng nhập tệp dữ liệu một lần, sách và tiến độ lưu trong IndexedDB của thiết bị.
@@ -496,21 +500,30 @@ function renderSheet(spacer = true) {
   </div></div>`;
 }
 
+// Bản dịch tiếng Việt đọc liền mạch như một cuốn sách: bỏ tiêu đề trang, nối câu bị cắt giữa hai trang, bỏ phần chụp chồng; mốc trang chỉ là điểm neo ẩn.
+function renderFlow(b) {
+  const flow = flowOf(b.pages), byN = Object.fromEntries(b.pages.map(p => [p.n, p])), seen = new Set();
+  if (!flow.length) return `<p class="empty">Chưa có bản dịch nào.</p>`;
+  return `<div class="flow" lang="vi">${flow.map(x => {
+    const anchors = x.pages.filter(n => !seen.has(n)).map(n => { seen.add(n); return `<a id="p-${n}" class="anchor"></a>`; }).join("");
+    return `<p>${anchors}${markVi(x.t, x.pages.flatMap(n => viTerms(byN[n])))}</p>`;
+  }).join("")}</div>`;
+}
 function renderReading() {
   const b = book();
   if (!b || !b.pages.length) return PWA ? `<p class="empty">Chưa có sách trong ứng dụng.<br>Bấm <b>“Nhập dữ liệu”</b> ở trên và chọn tệp <b>sach-du-lieu.json</b> (chỉ cần làm một lần).</p>` : `<p class="empty">Chưa có trang nào. Dán một trang sách cho Claude để bắt đầu.</p>`;
   const vocab = items("tu-vung"), vw = state.view, left = vocab.filter(v => !known.has(v.key)).length;
   const jump = b.pages.length > 3 ? `<select id="jump" aria-label="Đi tới trang"><option value="">Đi tới trang…</option>${b.pages.map(p => `<option value="${p.n}">Trang ${pad(p.n)}</option>`).join("")}</select>` : "";
   return ttsSettings() + `<div class="toolbar"><button class="primary" id="openReader">Đọc kiểu Kindle</button>${b.pages.length > 1 ? `<button data-viewpage="${b.pages[b.pages.length - 1].n}">Trang mới nhất</button>` : ""}${jump}<span class="seg" role="group" aria-label="Hiển thị">
-      <button data-view="both" aria-pressed="${vw === "both"}">Song ngữ</button><button data-view="src" aria-pressed="${vw === "src"}">Bản gốc</button><button data-view="vi" aria-pressed="${vw === "vi"}">Bản dịch</button></span>
+      <button data-view="both" aria-pressed="${vw === "both"}">Song ngữ</button><button data-view="src" aria-pressed="${vw === "src"}">Bản gốc</button><button data-view="vi" aria-pressed="${vw === "vi"}">Bản dịch</button><button data-view="flow" aria-pressed="${vw === "flow"}">Liền mạch</button></span>
       <span class="stat">${b.pages.length} trang · ${left} từ mới chưa nhớ</span></div>${vw !== "vi" ? `<p class="help" style="font-size:.82rem;color:var(--muted);margin:-6px 0 12px">Mẹo: chạm vào bất kỳ từ nào trong bản gốc để tra ngay.</p>` : ""}` +
-    b.pages.map(p => `<article class="page" id="p-${p.n}"><div class="page-head"><span class="label">Trang ${pad(p.n)}${p.label ? ` · trang sách ${esc(p.label)}` : ""}</span><span class="pg">${esc(p.date || "")}</span></div>
+    (vw === "flow" ? `<p class="help" style="font-size:.82rem;color:var(--muted);margin:-6px 0 12px">Chỉ tiếng Việt, đọc liền như một cuốn sách. Từ mới chưa nhớ vẫn tô màu, chạm vào để xem từ gốc.</p>` + renderFlow(b) : b.pages.map(p => `<article class="page" id="p-${p.n}"><div class="page-head"><span class="label">Trang ${pad(p.n)}${p.label ? ` · trang sách ${esc(p.label)}` : ""}</span><span class="pg">${esc(p.date || "")}</span></div>
       ${vw !== "vi" ? `<div class="src">${(p.source || []).map(t => `<p lang="${esc(b.lang)}">${markNew(t, vocab, b.lang)}</p>`).join("")}</div>` : ""}
       ${vw !== "src" ? (p.translation || []).map(t => `<p>${markVi(t, viTerms(p))}</p>`).join("") + listenRow(b, p.n) : ""}
       ${p.note ? `<p class="note">${esc(p.note)}</p>` : ""}
       ${(p.hard || []).length ? `<details class="hard"><summary>Phân tích câu khó (${p.hard.length})</summary><ul>${p.hard.map(h => `<li><div class="quote" lang="${esc(b.lang)}">${esc(h.s)}</div><div>${esc(h.parts)}</div><div class="pg">${esc(h.mean)}</div></li>`).join("")}</ul></details>` : ""}
       ${p.insight ? `<details class="hard"><summary>Ý nghĩa sâu xa</summary><div class="insight">${insightHTML(p.insight)}</div></details>` : p.dbId && isOwner && !p.insightDone && (p.vocab || []).length ? `<button class="danger" data-explain="${esc(p.dbId)}">Giải thích ý nghĩa sâu xa</button>` : ""}
-      ${p.dbId && isOwner ? `<button class="danger" data-del="${esc(p.dbId)}">${state.confirmDel === p.dbId ? "Bấm lần nữa để xoá trang này" : "Xoá trang"}</button>` : ""}</article>`).join("");
+      ${p.dbId && isOwner ? `<button class="danger" data-del="${esc(p.dbId)}">${state.confirmDel === p.dbId ? "Bấm lần nữa để xoá trang này" : "Xoá trang"}</button>` : ""}</article>`).join(""));
 }
 
 function toolbar(kind) {
@@ -1123,6 +1136,10 @@ const rdKey = () => "rdpos:" + (book() ? book().id : "") + ":" + state.rdLang;
 function readerHTML() {
   const b = book(); if (!b) return "";
   const vocab = items("tu-vung"), lang = state.rdLang;
+  if (lang === "vi") { // đọc tiếng Việt liền mạch, không có đề mục trang
+    const byN = Object.fromEntries(b.pages.map(p => [p.n, p]));
+    return flowOf(b.pages).map(x => `<p>${markVi(x.t, x.pages.flatMap(n => viTerms(byN[n])))}</p>`).join("");
+  }
   return b.pages.map(p => {
     const vt = viTerms(p);
     const src = p.source || [], vi = p.translation || [];

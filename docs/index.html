@@ -175,6 +175,8 @@ nav.tabs a[hidden] { display: none; }
 .chip.on { background: var(--accent-soft); border-color: var(--accent); }
 .chip:disabled:not(.on) { opacity: .35; }
 
+.addto { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 10px; padding: 10px 12px; font-size: .92rem; }
+
 /* Thêm trang */
 .add { display: grid; gap: 14px; }
 .add .field { display: grid; gap: 6px; }
@@ -317,7 +319,7 @@ let REPO_BOOKS = /*__DATA__*/[];
 // Bản offline (xuất bằng tools/build.py --offline): không có claude.ai nên không dịch trang mới, không tra từ mới; đọc, ôn tập, trò chơi vẫn dùng được.
 // PWA = bản cài lên màn hình chính, chạy hoàn toàn offline: mã ứng dụng không chứa sách; người dùng nhập tệp dữ liệu một lần, sách và tiến độ lưu trong IndexedDB của thiết bị.
 const PWA = true;
-const OFFLINE = /*__OFFLINE__*/false || PWA, BUILT = "2026-11-14", SEED = /*__SEED__*/null;
+const OFFLINE = /*__OFFLINE__*/false || PWA, BUILT = "2026-11-15", SEED = /*__SEED__*/null;
 let dbPages = [], dbWords = [], db = null, sample = null, isOwner = false, canImage = false;
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
@@ -403,6 +405,25 @@ function filtered(kind) {
   return state.sort === "freq" ? list.map((it, i) => [it, i]).sort((a, b) => b[0].freq - a[0].freq || a[1] - b[1]).map(x => x[0]) : list;
 }
 // Dấu "đã nhớ": lưu cục bộ ngay, đồng thời đẩy lên db riêng của người dùng để điện thoại và máy tính dùng chung (bản ghi mới hơn thắng).
+// ---- Nhớ cuốn đang đọc: lưu trên máy và trong db riêng của người dùng (dùng chung giữa các thiết bị), mở lại là đúng cuốn đó ----
+let bookAt = store.get("bookAt", 0), prefsTimer = null;
+const prefsDoc = () => db.collection("data/users/" + uid).doc("prefs");
+function setBook(id) {
+  state.book = id;
+  if (id === "__new") return;
+  store.set("book", id); bookAt = Date.now(); store.set("bookAt", bookAt);
+  clearTimeout(prefsTimer); prefsTimer = setTimeout(pushPrefs, 600);
+}
+async function pushPrefs() { if (db && uid && state.book !== "__new") try { await prefsDoc().set({ book: state.book, at: bookAt }); } catch (e) {} }
+async function pullPrefs() {
+  if (!db || !uid) return;
+  try {
+    const snap = await prefsDoc().get(), d = snap.exists ? snap.data() : null;
+    if (d && typeof d.book === "string" && d.at > bookAt) {
+      state.book = d.book; store.set("book", d.book); bookAt = d.at; store.set("bookAt", bookAt); state.game = null; state.deck = null; render();
+    } else if (!d || d.at < bookAt) pushPrefs();
+  } catch (e) {}
+}
 let uid = null, knownAt = store.get("knownAt", 0), knownTimer = null;
 const knownDoc = () => db.collection("data/users/" + uid).doc("known");
 const DAY = 864e5;
@@ -452,7 +473,7 @@ function readyToPaste() {
   if (tab() !== "them-trang" || state.busy || state.rdOpen) return;
   state.focusAdd = true; render();
 }
-document.addEventListener("visibilitychange", () => { if (!document.hidden) { pullKnown(); readyToPaste(); } });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { pullKnown(); pullPrefs(); readyToPaste(); } });
 addEventListener("focus", () => readyToPaste());
 addEventListener("pageshow", () => readyToPaste());
 // ---- Nghe lại bản tiếng Việt (giọng đọc có sẵn của thiết bị) ----
@@ -991,6 +1012,25 @@ function renderBookAdmin() {
   return `<details class="hard"><summary>Các cuốn sách của bạn (${BOOKS.length})</summary><div style="margin-top:8px">${rows}</div></details>`;
 }
 
+function moveBox(r) {
+  if (!r || !isOwner || !db || !(state.result || r.dbId)) return "";
+  const others = BOOKS.filter(x => x.id !== r.book); if (!others.length) return "";
+  return `<div class="row" style="margin-top:10px"><span class="help">Lưu nhầm cuốn?</span><select id="moveTo" aria-label="Chuyển sang cuốn">${others.map(x => `<option value="${esc(x.id)}">${esc(x.title)}</option>`).join("")}</select><button id="moveGo">Chuyển trang này sang cuốn đó</button></div>`;
+}
+async function movePage() {
+  const bk = book(), r = state.result || (bk && bk.pages[bk.pages.length - 1]), sel = document.getElementById("moveTo");
+  const to = sel && BOOKS.find(x => x.id === sel.value);
+  if (!r || !to || !db || state.busy) return;
+  const n = (to.pages.length ? to.pages[to.pages.length - 1].n : 0) + 1;
+  const doc = { book: to.id, bookTitle: to.title, bookOriginal: to.original || "", bookAuthor: to.author || "", lang: to.lang || r.lang || "en", n };
+  for (const k of ["label", "date", "source", "translation", "note", "vocab", "patterns", "hard", "insight", "insightDone"]) if (r[k] !== undefined) doc[k] = r[k];
+  try {
+    await db.collection("pages").doc(`${to.id}-${pad(n)}`).set(doc);
+    await db.collection("pages").doc(`${r.book}-${pad(r.n)}`).delete();
+    state.result = null; setBook(to.id); state.err = false; state.msg = `Đã chuyển trang sang cuốn “${to.title}” (trang ${pad(n)}).`;
+  } catch (e) { state.err = true; state.msg = "Chưa chuyển được, thử lại."; }
+  render();
+}
 function renderAdd() {
   if (!sample || !db) return `<p class="empty">Phần thêm trang cần mở trang này trên claude.ai khi đã đăng nhập. Đang kết nối…</p>`;
   if (!isOwner) return `<p class="empty">Chỉ chủ sổ tay mới thêm được trang mới.</p>`;
@@ -998,6 +1038,7 @@ function renderAdd() {
   const r = state.result || (state.book !== "__new" && b && b.pages[b.pages.length - 1]);
   const vocab = items("tu-vung"), vt = viTerms(r), L = esc(b ? b.lang : "en"), src = (r && r.source) || [], vi = (r && r.translation) || [];
   return `<div class="add">
+    <div class="addto" role="status">Trang mới sẽ lưu vào cuốn <b>${esc(state.book === "__new" ? (state.newTitle.trim() || "sách mới") : b ? b.title : "")}</b>${state.book === "__new" || !b ? "" : ` (trang ${pad(next)})`}. Không đúng cuốn? Đổi ở ô “Sách” bên dưới trước khi dán.</div>
     <div class="field"><label class="label" for="bookPick">Sách</label>
       <div class="row"><select id="bookPick">${BOOKS.map(x => `<option value="${esc(x.id)}"${x.id === state.book ? " selected" : ""}>${esc(x.title)}</option>`).join("")}<option value="__new"${state.book === "__new" ? " selected" : ""}>+ Sách mới…</option></select>
       ${state.book === "__new" ? `<input type="text" id="newTitle" placeholder="Tên sách (tiếng Việt hoặc tên bạn quen gọi)" value="${esc(state.newTitle)}"><input type="text" id="newOrig" placeholder="Tên gốc, ví dụ The World in 2050 (không bắt buộc)" value="${esc(state.newOrig)}"><input type="text" id="newAuthor" placeholder="Tác giả (không bắt buộc)" value="${esc(state.newAuthor)}">` : `<span class="stat">Trang sẽ lưu: ${pad(next)}</span>`}</div></div>
@@ -1011,8 +1052,11 @@ function renderAdd() {
       ${state.file ? `<div class="row"><img class="thumb" id="thumb" alt="Ảnh trang sách"><button id="dropImg">Bỏ ảnh</button></div>` : ""}</div>
     <div class="row"><button class="primary" id="go"${state.busy ? " disabled" : ""}>${state.busy ? "Đang dịch…" : "Dịch và lưu trang"}</button>${state.busy ? `<button id="stop">Dừng</button>` : ""}
       <span class="help">Mất khoảng 30–90 giây. Lần đầu Claude sẽ hỏi bạn cho phép.</span></div>
-    ${state.dup ? `<div class="status warn" role="alert"><b>Trang này đã dịch rồi.</b> Nội dung giống ${state.dup.pct}% với <b>Trang ${pad(state.dup.n)}</b> của sách này, nên chưa lưu thêm.
-      <div class="row" style="margin-top:8px"><button data-viewpage="${state.dup.n}">Xem Trang ${pad(state.dup.n)}</button><button id="dupForce">Vẫn lưu thành trang mới</button><button id="dupCancel">Bỏ qua</button></div></div>` : ""}
+    ${state.dup ? (state.dup.other
+      ? `<div class="status warn" role="alert"><b>Có thể bạn đang dán nhầm cuốn.</b> Nội dung giống ${state.dup.pct}% với <b>Trang ${pad(state.dup.n)}</b> của cuốn “${esc(state.dup.other.title)}”, còn bạn đang chọn cuốn “${esc(b ? b.title : "")}”. Chưa lưu gì cả.
+      <div class="row" style="margin-top:8px"><button class="primary" data-switchbook="${esc(state.dup.other.id)}">Chuyển sang cuốn “${esc(state.dup.other.title)}”</button><button id="dupForce">Vẫn lưu vào cuốn này</button><button id="dupCancel">Bỏ qua</button></div></div>`
+      : `<div class="status warn" role="alert"><b>Trang này đã dịch rồi.</b> Nội dung giống ${state.dup.pct}% với <b>Trang ${pad(state.dup.n)}</b> của sách này, nên chưa lưu thêm.
+      <div class="row" style="margin-top:8px"><button data-viewpage="${state.dup.n}">Xem Trang ${pad(state.dup.n)}</button><button id="dupForce">Vẫn lưu thành trang mới</button><button id="dupCancel">Bỏ qua</button></div></div>`) : ""}
     ${state.msg ? `<div class="status${state.err ? " err" : ""}" id="status">${esc(state.msg)}</div>` : ""}
     ${r ? `<article class="result page"><div class="page-head"><span class="label">${state.result ? "Đã lưu" : "Trang mới nhất"} · Trang ${pad(r.n)}${r.label ? ` · trang sách ${esc(r.label)}` : ""}</span><span class="pg">Bấm vào từ tô màu để xem nghĩa</span></div>
       ${Array.from({ length: Math.max(src.length, vi.length) }, (_, i) => `
@@ -1026,6 +1070,7 @@ function renderAdd() {
       ${(r.hard || []).length ? `<details class="hard"><summary>Phân tích câu khó (${r.hard.length})</summary><ul>${r.hard.map(h => `<li><div class="quote" lang="${L}">${esc(h.s)}</div><div>${esc(h.parts)}</div><div class="pg">${esc(h.mean)}</div></li>`).join("")}</ul></details>` : ""}
       ${r.insight ? `<h3>Ý nghĩa sâu xa</h3><div class="insight">${insightHTML(r.insight)}</div>` : (r.vocab || []).length && !r.insightDone && !state.busy && (state.result || r.dbId) ? `<p><button class="primary" id="retryInsight">Giải thích ý nghĩa sâu xa</button></p>` : ""}
     </article>` : ""}
+    ${moveBox(r)}
     ${renderBookAdmin()}
   </div>`;
 }
@@ -1144,8 +1189,13 @@ function findDuplicate(text, pages) {
   }
   return best;
 }
+function findInOtherBooks(text, currentId) {
+  let best = null;
+  for (const bk of BOOKS) { if (bk.id === currentId) continue; const d = findDuplicate(text, bk.pages); if (d && (!best || d.ratio > best.ratio)) best = { ...d, book: bk }; }
+  return best;
+}
 function showDup(d, pending) {
-  state.dup = { n: d.page.n, pct: Math.round(d.ratio * 100), pending: pending || null };
+  state.dup = { n: d.page.n, pct: Math.round(d.ratio * 100), pending: pending || null, other: d.book ? { id: d.book.id, title: d.book.title } : null };
   state.err = true; state.msg = ""; state.busy = false; render();
 }
 
@@ -1156,7 +1206,7 @@ async function savePage(b, next, out) {
     vocab: [], patterns: [], hard: [] };
   await db.collection("pages").doc(`${b.id}-${pad(next)}`).set(page);
   state.result = page; state.draft = ""; store.set("draft", ""); state.file = null; state.pageLabel = ""; state.dup = null;
-  state.book = b.id; store.set("book", b.id); state.msg = ""; state.newTitle = ""; state.newOrig = ""; state.newAuthor = "";
+  setBook(b.id); state.msg = ""; state.newTitle = ""; state.newOrig = ""; state.newAuthor = "";
   state.busy = false; render();
   return analyze(page);
 }
@@ -1177,7 +1227,7 @@ async function translate(force) {
   const prev = b.pages[b.pages.length - 1];
   state.dup = null;
   // Dán chữ: kiểm tra trùng trước khi tốn lượt dùng Claude.
-  if (!force && !hasImage) { const d = findDuplicate(state.draft, b.pages); if (d) return showDup(d); }
+  if (!force && !hasImage) { const d = findDuplicate(state.draft, b.pages) || findInOtherBooks(state.draft, b.id); if (d) return showDup(d); }
   state.busy = true; state.err = false; state.result = null; state.msg = "Claude đang đọc và dịch trang…"; state.ctl = new AbortController(); render();
   try {
     const reply = await sample(buildPrompt(b, b.lang, next, prev ? (prev.translation || []).join("\n").slice(-1500) : "", hasImage),
@@ -1187,7 +1237,7 @@ async function translate(force) {
     if (!out.translation.length || !out.source.length) throw { code: reply.truncated ? "truncated" : "invalid_json" };
     if (reply.truncated) throw { code: "truncated" };
     // Ảnh: chỉ biết chữ sau khi Claude đọc, nên kiểm tra trùng ở đây và giữ kết quả để khỏi dịch lại nếu người dùng vẫn muốn lưu.
-    if (!force) { const d = findDuplicate((out.source || []).join(" "), b.pages); if (d) return showDup(d, { b, next, out }); }
+    if (!force) { const d = findDuplicate((out.source || []).join(" "), b.pages) || findInOtherBooks((out.source || []).join(" "), b.id); if (d) return showDup(d, { b, next, out }); }
     return await savePage(b, next, out);
   } catch (e) {
     state.err = true; state.msg = errVi(e) + (e && (e.code === "invalid_json" || e.code === "truncated") ? " Bấm dịch lại, hoặc cắt trang làm hai phần rồi dán lần lượt." : "");
@@ -1344,7 +1394,7 @@ function renderCore() {
   const no = document.getElementById("newOrig"); if (no) no.oninput = () => { state.newOrig = no.value; renderHeader(); };
   const na = document.getElementById("newAuthor"); if (na) na.oninput = () => { state.newAuthor = na.value; renderHeader(); };
   const pl = document.getElementById("pageLabel"); if (pl) pl.oninput = () => { state.pageLabel = pl.value; };
-  const bp = document.getElementById("bookPick"); if (bp) bp.onchange = () => { state.book = bp.value; state.game = null; state.result = null; state.dup = null; state.msg = ""; if (bp.value !== "__new") store.set("book", bp.value); render(); };
+  const bp = document.getElementById("bookPick"); if (bp) bp.onchange = () => { state.book = bp.value; state.game = null; state.result = null; state.dup = null; state.msg = ""; if (bp.value !== "__new") setBook(bp.value); render(); };
   const img = document.getElementById("img"); if (img) img.onchange = () => { if (img.files[0]) { state.file = img.files[0]; render(); } };
   const th = document.getElementById("thumb"); if (th && state.file) th.src = URL.createObjectURL(state.file);
   const q = document.getElementById("q");
@@ -1405,6 +1455,8 @@ document.addEventListener("click", e => {
   else if (b.id === "lookupGo") return void lookupWord();
   else if (b.id === "lookupAdd") return void lookupAdd();
   else if (b.dataset.delword) { db.collection("words").doc(b.dataset.delword).delete().catch(() => {}); return; }
+  else if (b.dataset.switchbook) { setBook(b.dataset.switchbook); state.dup = null; state.result = null; state.game = null; }
+  else if (b.id === "moveGo") return void movePage();
   else if (b.id === "errClose") { const el = document.getElementById("errbar"); if (el) el.hidden = true; return; }
   else if (b.id === "errRetry") { state.game = null; state.deck = null; }
   else if (b.id === "reviewNow") { state.mode[t] = "game"; state.game = null; state.deck = null; }
@@ -1435,7 +1487,7 @@ document.addEventListener("keydown", e => {
 document.getElementById("bookSel").onchange = e => {
   state.book = e.target.value; state.deck = null; state.game = null; state.pop = null; state.tap = null; state.result = null; state.dup = null; state.msg = "";
   if (state.book === "__new") { if (location.hash !== "#them-trang") return void (location.hash = "#them-trang"); }
-  else store.set("book", state.book);
+  else setBook(state.book);
   render();
 };
 // Trình duyệt không cho trang tự đọc bộ nhớ tạm, nên bắt sự kiện Dán của người dùng (chữ hoặc ảnh) ở bất cứ đâu trong tab.
@@ -1458,7 +1510,7 @@ document.addEventListener("paste", e => {
   const [d, s, u] = await Promise.all([use("db"), use("sample"), use("user")]);
   db = d; sample = s; isOwner = !!(u && await u.isOwner());
   try { uid = u && u.id ? await u.id() : null; } catch (e) { uid = null; }
-  pullKnown();
+  pullKnown(); pullPrefs();
   if (s) canImage = !!(await s.limits().catch(() => null))?.images;
   if (db) db.collection("words").onSnapshot(snap => { dbWords = snap.docs.map(x => ({ ...x.data(), dbId: x.id })); render(); }, () => {});
   if (db) db.collection("pages").onSnapshot(snap => { dbPages = snap.docs.map(x => ({ ...x.data(), dbId: x.id })); render(); }, () => {});
@@ -1480,7 +1532,7 @@ async function importData(file) {
         touchKnown(); note += " Đã mang theo tiến độ học.";
       } else note += " Giữ nguyên tiến độ học đang có trên máy.";
     }
-    if (!REPO_BOOKS.find(x => x.id === state.book)) { state.book = REPO_BOOKS[0].id; store.set("book", state.book); }
+    if (!REPO_BOOKS.find(x => x.id === state.book)) setBook(REPO_BOOKS[0].id);
     state.notice = note; state.game = null; state.deck = null; render();
     setTimeout(() => { state.notice = ""; render(); }, 6000);
   } catch (e) { state.notice = "Không nhập được: " + (e && e.message ? e.message : "lỗi không rõ"); render(); }

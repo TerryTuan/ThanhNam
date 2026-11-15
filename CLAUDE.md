@@ -92,3 +92,7 @@ không đưa thêm nguyên văn sách vào repo (khi "đồng bộ", chỉ chép
 `tools/flow.js` (hàm `flowOf`) ghép bản dịch các trang thành một mạch như cuốn sách: bỏ phần hai trang chụp chồng lên nhau (phát hiện bằng bản gốc tiếng Anh rồi đối chiếu bản dịch), nối câu bị cắt đôi giữa hai trang (dấu "..."), không có tiêu đề trang.
 `build.py` nhúng nó vào ứng dụng (nút "Liền mạch" ở tab Bản dịch và chế độ tiếng Việt của Kindle). `python3 tools/export_epub_vi.py [--data <thư mục chứa sach/*/du-lieu.json>]` xuất EPUB chỉ tiếng Việt cho từng cuốn (`app/<id>-tieng-viet.epub`, bỏ qua trong git).
 Khi người dùng nhắc "xuất bản dịch tiếng Việt": lấy trang mới nhất từ db (ArtifactData, out_dir), gộp với `sach/` vào một thư mục tạm NGOÀI repo, chạy lệnh trên với `--data`, gửi tệp bằng SendUserFile; không chép nguyên văn sách mới vào repo (xem cảnh báo quyền riêng tư).
+
+## Nhớ cuốn đang đọc và chống dán nhầm cuốn
+`setBook(id)` là cách duy nhất đổi cuốn đang chọn: lưu `book` trong localStorage và trong db riêng của người dùng (tài liệu `data/users/<id>/prefs` với `book`, `at`), nên mở lại hay đổi thiết bị vẫn đúng cuốn cũ (`pullPrefs` khi mở và khi quay lại ứng dụng).
+Tab + Thêm có khung "Trang mới sẽ lưu vào cuốn …"; dán trang giống một trang của cuốn khác thì cảnh báo "dán nhầm cuốn" (nút chuyển sang cuốn đó) trước khi lưu; trang vừa lưu có thể chuyển sang cuốn khác bằng nút "Chuyển trang này sang cuốn đó" (ghi trang vào cuốn đích với số trang kế tiếp rồi xoá bản cũ).

@@ -104,3 +104,9 @@ Có ô "Tự đọc" trong khung giải nghĩa để tắt/bật (lưu trong loc
 Sửa 2026-11: chỉ tự đọc TỪ MỚI (mục từ vựng chưa nhớ, tức từ được tô màu). Từ đã nhớ và từ thường chạm vào để tra thì không tự đọc (tránh đọc ngoài ý muốn khi chạm vào chữ); muốn nghe thì bấm nút Nghe. Ô "Tự đọc từ mới" tắt/bật được.
 
 Sửa 2026-11 (lần 2): chạm vào từ thường mặc định KHÔNG làm gì (không mở khung, không gọi Claude), để khỏi cắt ngang lúc đọc. Chỉ từ tô màu (từ mới) phản hồi khi chạm. Ai cần tra từ bất kỳ thì bật nút "Tra từ thường" (`tapLookup`, lưu trong localStorage); chế độ Kindle có nút "Chạm để tra" riêng (`rdLookup`), mặc định tắt.
+
+## Hình ảnh và bảng biểu
+Khi dán ảnh chụp trang, ảnh được thu nhỏ (tối đa 2000 px, JPEG) và lưu bằng capability `assets` của artifact (chỉ chủ sổ tay), id ảnh nằm trong tài liệu trang: `img: {id, w, h}`; cờ `fig: true` khi trang có bảng/hình/biểu đồ.
+Ảnh phục vụ qua `/_blob/<id>`, hiển thị gập lại ("Ảnh gốc của trang") ở tab Bản dịch, tab + Thêm và ở chế độ Liền mạch (chỉ trang có `fig`). Trang cũ chưa có ảnh dùng nút "Gắn ảnh gốc" để thêm sau.
+Bảng được Claude chép thành bảng markdown (hàng `| a | b |`, dòng `|---|---|`) cả ở bản gốc lẫn bản dịch; hình được mô tả thành dòng `[Hình: ...]` / `[Figure: ...]`. Khối bảng giữ nguyên xuống dòng trong `source`/`translation`, `isTable`/`tableHTML`/`paraHTML` hiển thị thành bảng, `flow.js` không nối hay xoá bảng như văn xuôi, các tệp EPUB đổi thành thẻ `<table>`.
+Chưa có: ảnh gốc trong EPUB, bản offline và PWA (chỉ tải được từ claude.ai); lấy ảnh bằng Artifact read với `path` là id asset nếu cần nhúng sau.

@@ -6,6 +6,7 @@ Văn bản lấy từ tools/flow.js (qua Node): bỏ chỗ hai trang chụp ch�
 không có tiêu đề trang trong thân sách; mục lục chia theo cụm 10 trang.
 """
 import json
+import re
 import subprocess
 import sys
 import uuid
@@ -24,6 +25,9 @@ body { font-family: Georgia, 'Times New Roman', serif; line-height: 1.7; margin:
 h1 { font-size: 1.4em; margin: 1.4em 0 .8em; }
 p { margin: 0; text-indent: 1.4em; text-align: justify; }
 p.first { text-indent: 0; }
+table { border-collapse: collapse; margin: 0 0 1em; font-size: .9em; width: 100%; }
+th, td { border: 1px solid #8886; padding: 3px 6px; text-align: left; vertical-align: top; }
+th { background: #8882; }
 """
 XHTML_HEAD = ('<?xml version="1.0" encoding="utf-8"?>\n<!DOCTYPE html>\n'
               '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="vi" xml:lang="vi">')
@@ -31,6 +35,19 @@ XHTML_HEAD = ('<?xml version="1.0" encoding="utf-8"?>\n<!DOCTYPE html>\n'
 
 def x(t):
     return escape(str(t if t is not None else ""), quote=False)
+
+def is_table(t):
+    return "\n" in t and sum(1 for l in t.split("\n") if l.strip().startswith("|")) >= 2
+
+
+def table_html(t):
+    rows = [[c.strip() for c in l.strip().strip("|").split("|")] for l in t.split("\n") if l.strip().startswith("|")]
+    sep = len(rows) > 1 and all(re.fullmatch(r":?-{2,}:?", c) for c in rows[1])
+    head, body = (rows[0], rows[2:]) if sep else (None, rows)
+    out = "<table>"
+    if head:
+        out += "<thead><tr>" + "".join(f"<th>{escape(c, quote=False)}</th>" for c in head) + "</tr></thead>"
+    return out + "<tbody>" + "".join("<tr>" + "".join(f"<td>{escape(c, quote=False)}</td>" for c in r) + "</tr>" for r in body) + "</tbody></table>"
 
 
 def write_epub(book, jf, path, group=10):
@@ -52,7 +69,7 @@ def write_epub(book, jf, path, group=10):
                 anchors += f'<span id="p{n:03d}"></span>'
                 anchor_chunk[n] = ci  # mốc trang nằm trong tệp của đoạn chứa nó (đoạn nối từ trang trước có thể kéo mốc sang tệp trước)
         cls = ' class="first"' if not bodies[ci] else ""
-        bodies[ci].append(f"<p{cls}>{anchors}{x(para['t'])}</p>")
+        bodies[ci].append(anchors + table_html(para["t"]) if is_table(para["t"]) else f"<p{cls}>{anchors}{x(para['t'])}</p>")
     keep = [ci for ci in range(len(chunks)) if bodies[ci]]  # bỏ phần trống nếu mọi trang của nó đã nối vào phần trước
     fname_of = {ci: f"v{k + 1:02d}.xhtml" for k, ci in enumerate(keep)}
     files, nav = [], []

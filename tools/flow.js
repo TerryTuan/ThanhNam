@@ -5,6 +5,7 @@
 //  1) Trang chụp chồng lên nhau (cuối trang trước trùng đầu trang sau): bỏ các câu bị lặp ở trang sau, có đối chiếu bản dịch để chắc chắn.
 //  2) Câu bị cắt đôi giữa hai trang (dấu "..."): nối hai nửa lại thành một đoạn.
 (function (root) {
+  const isTable = t => typeof t === "string" && t.indexOf("\n") >= 0 && t.split("\n").filter(l => /^\s*\|/.test(l)).length >= 2;
   const ELL_END = /\s*(\.\.\.|…)\s*$/, ELL_START = /^\s*(\.\.\.|…)\s*/;
   const wordsOf = t => (String(t).toLowerCase().replace(/[’]/g, "'").match(/[\p{L}\p{N}']+/gu) || []);
 
@@ -34,7 +35,7 @@
   function dropLeadingSentences(paras, n) {
     const out = []; let left = n;
     for (const p of paras) {
-      if (left <= 0) { out.push(p); continue; }
+      if (left <= 0 || isTable(p)) { out.push(p); continue; }
       const ss = splitSentences(left === n ? p.replace(ELL_START, "") : p);
       if (ss.length <= left) { left -= ss.length; continue; }
       out.push(ss.slice(left).join(" ")); left = 0;
@@ -67,7 +68,7 @@
       if (!paras.length) { prev = p; return; }
       // 2) nối câu bị cắt đôi
       const last = out[out.length - 1];
-      if (last && prev) {
+      if (last && prev && !isTable(last.t) && !isTable(paras[0])) {
         const aOpen = ELL_END.test(last.t), first = paras[0], bCont = ELL_START.test(first);
         const rest = first.replace(ELL_START, ""), bLower = /^\p{Ll}/u.test(rest);
         const aEndsSentence = /[.!?"”)\]]\s*$/.test(last.t);

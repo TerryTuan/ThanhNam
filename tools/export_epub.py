@@ -41,6 +41,9 @@ p.v { margin: 0 0 .8em; }
 .formula { font-family: 'Helvetica Neue', Arial, sans-serif; font-weight: bold; color: #1f6f8b; }
 .note { font-size: .88em; opacity: .75; border-left: 2px solid #8886; padding-left: .6em; }
 .insight p { border-left: 2px solid #1f6f8b; padding-left: .7em; }
+table { border-collapse: collapse; margin: 0 0 1em; font-size: .9em; width: 100%; }
+th, td { border: 1px solid #8886; padding: 3px 6px; text-align: left; vertical-align: top; }
+th { background: #8882; }
 """
 
 
@@ -69,6 +72,19 @@ def word_regex(w):
 
 def x(t):
     return escape(str(t if t is not None else ""), quote=False)
+
+def is_table(t):
+    return "\n" in t and sum(1 for l in t.split("\n") if l.strip().startswith("|")) >= 2
+
+
+def table_html(t):
+    rows = [[c.strip() for c in l.strip().strip("|").split("|")] for l in t.split("\n") if l.strip().startswith("|")]
+    sep = len(rows) > 1 and all(re.fullmatch(r":?-{2,}:?", c) for c in rows[1])
+    head, body = (rows[0], rows[2:]) if sep else (None, rows)
+    out = "<table>"
+    if head:
+        out += "<thead><tr>" + "".join(f"<th>{escape(c, quote=False)}</th>" for c in head) + "</tr></thead>"
+    return out + "<tbody>" + "".join("<tr>" + "".join(f"<td>{escape(c, quote=False)}</td>" for c in r) + "</tr>" for r in body) + "</tbody></table>"
 
 
 def vocab_of(book):
@@ -99,6 +115,11 @@ def build_book(book):
             src, vi = p.get("source") or [], p.get("translation") or []
             used = set()
             for i in range(max(len(src), len(vi))):
+                if i < len(src) and is_table(src[i]):
+                    body.append(table_html(src[i]))
+                    if i < len(vi):
+                        body.append(table_html(vi[i]) if is_table(vi[i]) else f'<p class="vi">{x(vi[i])}</p>')
+                    continue
                 if i < len(src):
                     text, hits = src[i], []
                     for v in vocab:
@@ -127,7 +148,7 @@ def build_book(book):
                     out.append(x(text[pos:]))
                     body.append(f'<p class="src" lang="en">{"".join(out)}</p>')
                 if i < len(vi):
-                    body.append(f'<p class="vi">{x(vi[i])}</p>')
+                    body.append(table_html(vi[i]) if is_table(vi[i]) else f'<p class="vi">{x(vi[i])}</p>')
             if p.get("note"):
                 body.append(f'<p class="note">{x(p["note"])}</p>')
             pv = [v for v in p.get("vocab") or [] if isinstance(v, dict) and v.get("w")]

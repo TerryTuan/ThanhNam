@@ -128,6 +128,19 @@ input[type="search"] { font: inherit; font-size: .88rem; padding: 6px 10px; bord
 .offbar { font-size: .78rem; color: var(--muted); padding: 2px 0 8px; }
 nav.tabs a[hidden] { display: none; }
 
+.tblwrap { overflow-x: auto; margin: 0 0 1em; }
+.tbl { border-collapse: collapse; font-size: .92em; min-width: 100%; font-family: var(--font-ui); }
+.tbl th, .tbl td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }
+.tbl th { background: var(--accent-soft); }
+.src .tbl { opacity: .85; }
+p.figcap { font-style: italic; color: var(--muted); border-left: 2px solid var(--line); padding-left: 10px; text-indent: 0; }
+details.fig { margin: 4px 0 12px; }
+details.fig summary { cursor: pointer; color: var(--accent); font-size: .88rem; }
+details.fig img { display: block; width: 100%; max-width: 560px; margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; }
+label.attach { display: inline-block; cursor: pointer; font-size: .85rem; color: var(--accent); border: 1px dashed var(--line); border-radius: 8px; padding: 4px 10px; margin: 4px 0 10px; }
+#toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 70; background: var(--ink); color: var(--bg); border-radius: 20px; padding: 8px 16px; font-size: .88rem; max-width: 90vw; }
+#toast[hidden] { display: none; }
+
 /* Chạm vào từ bản gốc để tra */
 #view p[lang], #rdContent p[lang] { cursor: pointer; -webkit-tap-highlight-color: rgba(31, 111, 139, .15); }
 #tapToggle[aria-pressed="true"], #rdLookup[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
@@ -230,6 +243,7 @@ details.hard li { margin-bottom: 8px; }
 //  1) Trang chụp chồng lên nhau (cuối trang trước trùng đầu trang sau): bỏ các câu bị lặp ở trang sau, có đối chiếu bản dịch để chắc chắn.
 //  2) Câu bị cắt đôi giữa hai trang (dấu "..."): nối hai nửa lại thành một đoạn.
 (function (root) {
+  const isTable = t => typeof t === "string" && t.indexOf("\n") >= 0 && t.split("\n").filter(l => /^\s*\|/.test(l)).length >= 2;
   const ELL_END = /\s*(\.\.\.|…)\s*$/, ELL_START = /^\s*(\.\.\.|…)\s*/;
   const wordsOf = t => (String(t).toLowerCase().replace(/[’]/g, "'").match(/[\p{L}\p{N}']+/gu) || []);
 
@@ -259,7 +273,7 @@ details.hard li { margin-bottom: 8px; }
   function dropLeadingSentences(paras, n) {
     const out = []; let left = n;
     for (const p of paras) {
-      if (left <= 0) { out.push(p); continue; }
+      if (left <= 0 || isTable(p)) { out.push(p); continue; }
       const ss = splitSentences(left === n ? p.replace(ELL_START, "") : p);
       if (ss.length <= left) { left -= ss.length; continue; }
       out.push(ss.slice(left).join(" ")); left = 0;
@@ -292,7 +306,7 @@ details.hard li { margin-bottom: 8px; }
       if (!paras.length) { prev = p; return; }
       // 2) nối câu bị cắt đôi
       const last = out[out.length - 1];
-      if (last && prev) {
+      if (last && prev && !isTable(last.t) && !isTable(paras[0])) {
         const aOpen = ELL_END.test(last.t), first = paras[0], bCont = ELL_START.test(first);
         const rest = first.replace(ELL_START, ""), bLower = /^\p{Ll}/u.test(rest);
         const aEndsSentence = /[.!?"”)\]]\s*$/.test(last.t);
@@ -319,7 +333,7 @@ let REPO_BOOKS = [{"id": "the-foundation-of-winning-golf", "title": "The foundat
 // PWA = bản cài lên màn hình chính, chạy hoàn toàn offline: mã ứng dụng không chứa sách; người dùng nhập tệp dữ liệu một lần, sách và tiến độ lưu trong IndexedDB của thiết bị.
 const PWA = /*__PWA__*/false;
 const OFFLINE = /*__OFFLINE__*/false || PWA, BUILT = "/*__BUILT__*/", SEED = /*__SEED__*/null;
-let dbPages = [], dbWords = [], db = null, sample = null, isOwner = false, canImage = false;
+let assets = null, dbPages = [], dbWords = [], db = null, sample = null, isOwner = false, canImage = false;
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -588,6 +602,22 @@ function viTerms(p) {
   return out;
 }
 function markVi(text, terms) { return markTerms(text, terms); }
+
+// Khối bảng (markdown) và chú thích hình được giữ nguyên cấu trúc thay vì gộp thành đoạn văn.
+const isTable = t => typeof t === "string" && t.indexOf("\n") >= 0 && t.split("\n").filter(l => /^\s*\|/.test(l)).length >= 2;
+const isFigCap = t => /^\s*\[(Hình|Figure|Fig|图)[^\]]*\]\s*$/i.test(String(t));
+function tableHTML(t) {
+  const rows = t.split("\n").map(l => l.trim()).filter(l => l.startsWith("|")).map(l => l.replace(/^\||\|$/g, "").split("|").map(c => c.trim()));
+  const sep = rows.length > 1 && rows[1].every(c => /^:?-{2,}:?$/.test(c)), head = sep ? rows[0] : null, body = rows.slice(sep ? 2 : 0);
+  return `<div class="tblwrap"><table class="tbl">${head ? `<thead><tr>${head.map(c => `<th>${esc(c)}</th>`).join("")}</tr></thead>` : ""}<tbody>${body.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+function paraHTML(t, { lang = "", cls = "", mark = null, pre = "" } = {}) {
+  if (isTable(t)) return pre + tableHTML(t);
+  if (isFigCap(t)) return `<p class="figcap">${pre}${esc(t)}</p>`;
+  return `<p${cls ? ` class="${cls}"` : ""}${lang ? ` lang="${esc(lang)}"` : ""}>${pre}${mark ? mark(t) : esc(t)}</p>`;
+}
+const figHTML = p => OFFLINE || !p || !p.img || !p.img.id ? "" : `<details class="fig"><summary>Ảnh gốc của trang${p.fig ? " (có hình hoặc bảng)" : ""}</summary><img src="/_blob/${esc(p.img.id)}" alt="Ảnh chụp trang sách" loading="lazy"></details>`;
+const attachBtn = p => !OFFLINE && assets && isOwner && p && p.dbId && !p.img ? `<label class="attach"><span>Gắn ảnh gốc</span><input type="file" accept="image/*" data-attach="${esc(p.dbId)}" hidden></label>` : "";
 function markTerms(text, terms) {
   const hits = [];
   for (const t of terms) for (const m of text.matchAll(t.re)) if (m[0]) hits.push({ a: m.index, z: m.index + m[0].length, key: t.key });
@@ -623,8 +653,10 @@ function renderFlow(b) {
   const flow = flowOf(b.pages), byN = Object.fromEntries(b.pages.map(p => [p.n, p])), seen = new Set();
   if (!flow.length) return `<p class="empty">Chưa có bản dịch nào.</p>`;
   return `<div class="flow" lang="vi">${flow.map(x => {
-    const anchors = x.pages.filter(n => !seen.has(n)).map(n => { seen.add(n); return `<a id="p-${n}" class="anchor"></a>`; }).join("");
-    return `<p>${anchors}${markVi(x.t, x.pages.flatMap(n => viTerms(byN[n])))}</p>`;
+    const fresh = x.pages.filter(n => !seen.has(n));
+    const anchors = fresh.map(n => { seen.add(n); return `<a id="p-${n}" class="anchor"></a>`; }).join("");
+    const figs = fresh.map(n => byN[n]).filter(pg => pg && pg.fig).map(figHTML).join(""); // trang có hình/bảng: hiện kèm ảnh gốc (gập lại) ngay chỗ trang đó bắt đầu
+    return paraHTML(x.t, { pre: anchors, mark: t => markVi(t, x.pages.flatMap(n => viTerms(byN[n]))) }) + figs;
   }).join("")}</div>`;
 }
 function renderReading() {
@@ -636,8 +668,9 @@ function renderReading() {
       <button data-view="both" aria-pressed="${vw === "both"}">Song ngữ</button><button data-view="src" aria-pressed="${vw === "src"}">Bản gốc</button><button data-view="vi" aria-pressed="${vw === "vi"}">Bản dịch</button><button data-view="flow" aria-pressed="${vw === "flow"}">Liền mạch</button></span>
       <span class="stat">${b.pages.length} trang · ${left} từ mới chưa nhớ</span></div>${vw !== "vi" ? `<div class="row" style="margin:-4px 0 12px;align-items:center"><span class="help" style="font-size:.82rem;color:var(--muted)">Chạm vào từ tô màu để xem nghĩa.</span>${tapToggleBtn()}</div>` : ""}` +
     (vw === "flow" ? `<p class="help" style="font-size:.82rem;color:var(--muted);margin:-6px 0 12px">Chỉ tiếng Việt, đọc liền như một cuốn sách. Từ mới chưa nhớ vẫn tô màu, chạm vào để xem từ gốc.</p>` + renderFlow(b) : b.pages.map(p => `<article class="page" id="p-${p.n}"><div class="page-head"><span class="label">Trang ${pad(p.n)}${p.label ? ` · trang sách ${esc(p.label)}` : ""}</span><span class="pg">${esc(p.date || "")}</span></div>
-      ${vw !== "vi" ? `<div class="src">${(p.source || []).map(t => `<p lang="${esc(b.lang)}">${markNew(t, vocab, b.lang)}</p>`).join("")}</div>` : ""}
-      ${vw !== "src" ? (p.translation || []).map(t => `<p>${markVi(t, viTerms(p))}</p>`).join("") + listenRow(b, p.n) : ""}
+      ${vw !== "vi" ? `<div class="src">${(p.source || []).map(t => paraHTML(t, { lang: b.lang, mark: u => markNew(u, vocab, b.lang) })).join("")}</div>` : ""}
+      ${vw !== "src" ? (p.translation || []).map(t => paraHTML(t, { mark: u => markVi(u, viTerms(p)) })).join("") + listenRow(b, p.n) : ""}
+      ${figHTML(p)}${attachBtn(p)}
       ${p.note ? `<p class="note">${esc(p.note)}</p>` : ""}
       ${(p.hard || []).length ? `<details class="hard"><summary>Phân tích câu khó (${p.hard.length})</summary><ul>${p.hard.map(h => `<li><div class="quote" lang="${esc(b.lang)}">${esc(h.s)}</div><div>${esc(h.parts)}</div><div class="pg">${esc(h.mean)}</div></li>`).join("")}</ul></details>` : ""}
       ${p.insight ? `<details class="hard"><summary>Ý nghĩa sâu xa</summary><div class="insight">${insightHTML(p.insight)}</div></details>` : p.dbId && isOwner && !p.insightDone && (p.vocab || []).length ? `<button class="danger" data-explain="${esc(p.dbId)}">Giải thích ý nghĩa sâu xa</button>` : ""}
@@ -1068,8 +1101,9 @@ function renderAdd() {
     ${state.msg ? `<div class="status${state.err ? " err" : ""}" id="status">${esc(state.msg)}</div>` : ""}
     ${r ? `<article class="result page"><div class="page-head"><span class="label">${state.result ? "Đã lưu" : "Trang mới nhất"} · Trang ${pad(r.n)}${r.label ? ` · trang sách ${esc(r.label)}` : ""}</span><span class="pg">Chạm từ tô màu để xem nghĩa</span></div><div class="row" style="margin-bottom:8px">${tapToggleBtn()}</div>
       ${Array.from({ length: Math.max(src.length, vi.length) }, (_, i) => `
-        ${src[i] ? `<div class="src"><p lang="${L}">${markNew(src[i], vocab, b.lang)}</p></div>` : ""}
-        ${vi[i] ? `<p>${markVi(vi[i], vt)}</p>` : ""}`).join("")}
+        ${src[i] ? `<div class="src">${paraHTML(src[i], { lang: b.lang, mark: u => markNew(u, vocab, b.lang) })}</div>` : ""}
+        ${vi[i] ? paraHTML(vi[i], { mark: u => markVi(u, vt) }) : ""}`).join("")}
+      ${figHTML(r)}${attachBtn(r)}
       ${listenRow(b, r.n)}${ttsSettings()}
       ${r.note ? `<p class="note">${esc(r.note)}</p>` : ""}
       ${!(r.vocab || []).length && !state.busy ? `<p><button class="primary" id="retryAnalyze">Tạo từ vựng và mẫu câu</button></p>` : ""}
@@ -1090,7 +1124,11 @@ ${prevText ? `Đoạn dịch tiếng Việt của trang trước (để giữ m�
 ${hasImage ? "Trang sách nằm trong ảnh đính kèm: chép lại nguyên văn chữ trong ảnh, bỏ số chú thích nhỏ, số trang và dòng trạng thái của máy đọc sách (ví dụ \"5 mins left in chapter\", \"48%\")." : ""}
 ${state.draft.trim() ? `Nội dung trang:\n"""${state.draft.trim()}"""` : ""}
 
-Trả lời bằng văn bản thường theo đúng khuôn sau, KHÔNG dùng JSON, KHÔNG dùng markdown, không thêm lời dẫn:
+Quy tắc cho BẢNG và HÌNH (rất quan trọng, không được bỏ):
+- Nếu trang có BẢNG: chép lại thành bảng markdown, mỗi hàng một dòng, các ô cách nhau bằng dấu |, dòng thứ hai là |---|---|. Mỗi bảng là một khối riêng giữa hai dòng trống. Trong phần dịch giữ NGUYÊN cấu trúc bảng (cùng số hàng, số cột), dịch tiêu đề cột, nhãn hàng và ghi chú, giữ nguyên các con số và đơn vị.
+- Nếu trang có HÌNH, BIỂU ĐỒ hoặc SƠ ĐỒ: thêm một dòng riêng dạng [Hình: mô tả ngắn nội dung hình, kể cả số liệu và nhãn đọc được] đúng vị trí đó, ở bản gốc viết bằng ngôn ngữ gốc ([Figure: ...]) và ở bản dịch viết bằng tiếng Việt.
+
+Trả lời bằng văn bản thường theo đúng khuôn sau, KHÔNG dùng JSON, không dùng markdown nào khác ngoài bảng, không thêm lời dẫn:
 ===LANG===
 en (hoặc zh)
 ===SOURCE===
@@ -1103,14 +1141,16 @@ bản dịch tiếng Việt đoạn 1 (tự nhiên, sát nghĩa)
 bản dịch đoạn 2
 ===NOTE===
 ghi chú ngắn về tên riêng, thuật ngữ (để trống nếu không cần)
+===FIGURE===
+yes nếu trang có bảng, hình, biểu đồ hoặc sơ đồ; no nếu chỉ có chữ
 Các đoạn cách nhau một dòng trống; mỗi đoạn gốc ứng với một đoạn dịch. Nếu trang bị cắt giữa câu ở đầu hoặc cuối, giữ nguyên dấu "..." trong cả bản gốc và bản dịch.`;
 }
 
 // Đọc câu trả lời dạng khuôn ===TAG=== (chịu được dấu ngoặc kép, gạch ngang, chữ nghiêng trong sách mà JSON không chịu được).
 function parseTagged(text) {
   const grab = tag => { const m = String(text).match(new RegExp("===" + tag + "===[ \\t]*\\n?([\\s\\S]*?)(?=\\n?===[A-Z]+===|$)")); return m ? m[1].trim() : ""; };
-  const paras = t => t.split(/\n\s*\n/).map(x => x.replace(/\s*\n\s*/g, " ").trim()).filter(Boolean);
-  return { lang: /zh|chinese|trung|中/i.test(grab("LANG")) ? "zh" : "en", source: paras(grab("SOURCE")), translation: paras(grab("TRANSLATION")), note: grab("NOTE") };
+  const paras = t => t.split(/\n\s*\n/).map(x => isTable(x) ? x.trim().split("\n").map(l => l.trim()).join("\n") : x.replace(/\s*\n\s*/g, " ").trim()).filter(Boolean);
+  return { lang: /zh|chinese|trung|中/i.test(grab("LANG")) ? "zh" : "en", source: paras(grab("SOURCE")), translation: paras(grab("TRANSLATION")), note: grab("NOTE"), fig: /^\s*(yes|có|co|true)/i.test(grab("FIGURE")) };
 }
 
 // Bước 2: phân tích từ vựng, mẫu câu, câu khó từ chữ đã có (không gửi lại ảnh) để câu trả lời ngắn và ổn định.
@@ -1207,11 +1247,38 @@ function showDup(d, pending) {
   state.err = true; state.msg = ""; state.busy = false; render();
 }
 
+// Ảnh chụp trang được giữ lại cùng trang (để không mất hình và bảng): thu nhỏ còn tối đa 2000 px rồi lưu bằng capability assets (chỉ chủ sổ tay).
+async function packImage(file) {
+  const bmp = await createImageBitmap(file), k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+  const cv = document.createElement("canvas"); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+  const cx = cv.getContext("2d"); cx.fillStyle = "#fff"; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(bmp, 0, 0, cv.width, cv.height);
+  return { blob: await new Promise(res => cv.toBlob(res, "image/jpeg", 0.85)), w: cv.width, h: cv.height };
+}
+async function uploadPageImage(file) {
+  if (!assets || !file) return null;
+  try { const { blob, w, h } = await packImage(file), up = await assets.upload(blob); return up && up.id ? { id: up.id, w, h } : null; }
+  catch (e) { return null; }
+}
+function toast(msg) {
+  let el = document.getElementById("toast");
+  if (!el) { el = document.createElement("div"); el.id = "toast"; el.setAttribute("role", "status"); document.body.appendChild(el); }
+  el.textContent = msg; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { el.hidden = true; }, 3500);
+}
+async function attachImage(dbId, file) {
+  toast("Đang tải ảnh lên…");
+  const img = await uploadPageImage(file);
+  if (!img) return toast("Không tải được ảnh lên, thử lại.");
+  try { await db.collection("pages").doc(dbId).update({ img, fig: true }); toast("Đã gắn ảnh gốc vào trang."); }
+  catch (e) { toast("Chưa lưu được, thử lại."); }
+}
 async function savePage(b, next, out) {
+  const img = await uploadPageImage(state.file);
   const page = { book: b.id, bookTitle: b.title, bookOriginal: b.original || "", bookAuthor: b.author || "", lang: out.lang === "zh" ? "zh" : "en", n: next,
     label: state.pageLabel.trim(), date: new Date().toISOString().slice(0, 10),
     source: (out.source || []).map(String), translation: out.translation.map(String), note: String(out.note || ""),
     vocab: [], patterns: [], hard: [] };
+  if (img) page.img = img;
+  if (out.fig || (out.source || []).some(isTable) || (out.source || []).some(isFigCap)) page.fig = true;
   await db.collection("pages").doc(`${b.id}-${pad(next)}`).set(page);
   state.result = page; state.draft = ""; store.set("draft", ""); state.file = null; state.pageLabel = ""; state.dup = null;
   setBook(b.id); state.msg = ""; state.newTitle = ""; state.newOrig = ""; state.newAuthor = "";
@@ -1286,14 +1353,14 @@ function readerHTML() {
   const vocab = items("tu-vung"), lang = state.rdLang;
   if (lang === "vi") { // đọc tiếng Việt liền mạch, không có đề mục trang
     const byN = Object.fromEntries(b.pages.map(p => [p.n, p]));
-    return flowOf(b.pages).map(x => `<p>${markVi(x.t, x.pages.flatMap(n => viTerms(byN[n])))}</p>`).join("");
+    return flowOf(b.pages).map(x => paraHTML(x.t, { mark: t => markVi(t, x.pages.flatMap(n => viTerms(byN[n]))) })).join("");
   }
   return b.pages.map(p => {
     const vt = viTerms(p);
     const src = p.source || [], vi = p.translation || [];
     const body = lang === "both"
-      ? Array.from({ length: Math.max(src.length, vi.length) }, (_, i) => (src[i] ? `<p class="rd-src" lang="${esc(b.lang)}">${markNew(src[i], vocab, b.lang)}</p>` : "") + (vi[i] ? `<p>${markVi(vi[i], vt)}</p>` : "")).join("")
-      : lang === "src" ? src.map(t => `<p lang="${esc(b.lang)}">${markNew(t, vocab, b.lang)}</p>`).join("") : vi.map(t => `<p>${markVi(t, vt)}</p>`).join("");
+      ? Array.from({ length: Math.max(src.length, vi.length) }, (_, i) => (src[i] ? paraHTML(src[i], { lang: b.lang, cls: "rd-src", mark: u => markNew(u, vocab, b.lang) }) : "") + (vi[i] ? paraHTML(vi[i], { mark: u => markVi(u, vt) }) : "")).join("")
+      : lang === "src" ? src.map(t => paraHTML(t, { lang: b.lang, mark: u => markNew(u, vocab, b.lang) })).join("") : vi.map(t => paraHTML(t, { mark: u => markVi(u, vt) })).join("");
     return `<div class="rd-mark">Trang ${pad(p.n)}${p.label ? ` · trang sách ${esc(p.label)}` : ""}</div>${body}`;
   }).join("");
 }
@@ -1422,9 +1489,9 @@ document.addEventListener("click", e => {
   if (b.dataset.listen) {
     const [bid, n] = [b.dataset.listen.slice(0, b.dataset.listen.lastIndexOf(":")), +b.dataset.listen.slice(b.dataset.listen.lastIndexOf(":") + 1)];
     const pg = (BOOKS.find(x => x.id === bid) || { pages: [] }).pages.find(x => x.n === n);
-    return pg ? listen(b.dataset.listen, (pg.translation || []).join(" ")) : undefined;
+    return pg ? listen(b.dataset.listen, (pg.translation || []).filter(t => !isTable(t)).join(" ")) : undefined;
   }
-  if (b.hasAttribute("data-ttsrate")) { const r = [0.8, 0.9, 1, 1.15, 1.3]; ttsRate = r[(r.indexOf(ttsRate) + 1) % r.length]; store.set("ttsRate", ttsRate); if (ttsId) { const id = ttsId, [bid, n] = [id.slice(0, id.lastIndexOf(":")), +id.slice(id.lastIndexOf(":") + 1)]; const pg = (BOOKS.find(x => x.id === bid) || { pages: [] }).pages.find(x => x.n === n); if (pg) { ttsId = null; listen(id, (pg.translation || []).join(" ")); } } return refreshListen(); }
+  if (b.hasAttribute("data-ttsrate")) { const r = [0.8, 0.9, 1, 1.15, 1.3]; ttsRate = r[(r.indexOf(ttsRate) + 1) % r.length]; store.set("ttsRate", ttsRate); if (ttsId) { const id = ttsId, [bid, n] = [id.slice(0, id.lastIndexOf(":")), +id.slice(id.lastIndexOf(":") + 1)]; const pg = (BOOKS.find(x => x.id === bid) || { pages: [] }).pages.find(x => x.n === n); if (pg) { ttsId = null; listen(id, (pg.translation || []).filter(t => !isTable(t)).join(" ")); } } return refreshListen(); }
   if (b.id === "go") { state.dup = null; return translate(); }
   if (b.id === "dupCancel") { state.dup = null; return render(); }
   if (b.id === "dupForce") {
@@ -1485,6 +1552,7 @@ document.addEventListener("click", e => {
   render();
 });
 document.addEventListener("change", e => {
+  if (e.target.matches && e.target.matches("[data-attach]")) { const f = e.target.files[0]; if (f) attachImage(e.target.dataset.attach, f); e.target.value = ""; return; }
   if (e.target.matches && e.target.matches("[data-autospeak]")) { autoSpeak = e.target.checked; store.set("autoSpeak", autoSpeak); try { if (!autoSpeak) speechSynthesis.cancel(); } catch (err) {} document.querySelectorAll("[data-autospeak]").forEach(x => { x.checked = autoSpeak; }); }
   if (e.target.matches && e.target.matches("[data-ttsvoice]")) { store.set("ttsVoice", e.target.value); document.querySelectorAll("[data-ttsvoice]").forEach(x => { x.value = e.target.value; }); }
 });
@@ -1520,8 +1588,8 @@ document.addEventListener("paste", e => {
 });
 (async () => {
   const use = n => window.claude ? window.claude.use(n).catch(() => null) : Promise.resolve(null);
-  const [d, s, u] = await Promise.all([use("db"), use("sample"), use("user")]);
-  db = d; sample = s; isOwner = !!(u && await u.isOwner());
+  const [d, s, u, a] = await Promise.all([use("db"), use("sample"), use("user"), use("assets")]);
+  db = d; sample = s; assets = a; isOwner = !!(u && await u.isOwner());
   try { uid = u && u.id ? await u.id() : null; } catch (e) { uid = null; }
   pullKnown(); pullPrefs();
   if (s) canImage = !!(await s.limits().catch(() => null))?.images;

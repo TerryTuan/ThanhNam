@@ -602,8 +602,9 @@ function markTerms(text, terms) {
 }
 // Chạm vào từ là đọc luôn từ đó (ấn tượng âm thanh giúp nhớ từ mới); tắt được bằng ô "Tự đọc" trong khung giải nghĩa.
 let autoSpeak = store.get("autoSpeak", true);
-const speakWordNow = text => { if (autoSpeak && text) speak(cleanW(text)); };
-const autoSpeakBox = () => `<label class="help" style="align-self:center;display:inline-flex;gap:4px;align-items:center"><input type="checkbox" data-autospeak${autoSpeak ? " checked" : ""}> Tự đọc</label>`;
+// Chỉ tự đọc TỪ MỚI (mục từ vựng chưa nhớ); từ đã nhớ và từ thường chạm vào để tra thì không tự đọc, muốn nghe bấm nút Nghe.
+const speakWordNow = (text, key) => { if (autoSpeak && text && !(key && known.has(key))) speak(cleanW(text)); };
+const autoSpeakBox = () => `<label class="help" style="align-self:center;display:inline-flex;gap:4px;align-items:center"><input type="checkbox" data-autospeak${autoSpeak ? " checked" : ""}> Tự đọc từ mới</label>`;
 function renderSheet(spacer = true) {
   const v = state.pop && items("tu-vung").find(x => x.key === state.pop);
   if (!v) return "";
@@ -933,11 +934,10 @@ function tapAt(e, pEl) {
   const { raw, rel } = sentenceAround(pEl, w.node, w.off), sentence = raw.trim();
   // Từ hoặc cụm đã có trong danh sách (kể cả đã nhớ): mở luôn phần giải nghĩa có sẵn, không cần hỏi Claude.
   for (const it of items("tu-vung")) for (const m of raw.matchAll(wordRegex(it.w, b.lang))) if (rel >= m.index && rel < m.index + m[0].length) {
-    state.tap = null; state.pop = it.key; speakWordNow(it.w); refreshSheets(); return true;
+    state.tap = null; state.pop = it.key; speakWordNow(it.w, it.key); refreshSheets(); return true;
   }
   state.pop = null;
   const key = w.word.toLowerCase() + "|" + sentence.slice(0, 80);
-  speakWordNow(w.word); // đọc ngay trong lần chạm (iPhone chỉ cho phát âm khi có thao tác của người dùng)
   if (tapCache[key]) { state.tap = { word: w.word, res: tapCache[key] }; refreshSheets(); return true; }
   state.tap = { word: w.word, busy: true }; refreshSheets();
   if (!sample) { state.tap = { word: w.word, msg: OFFLINE ? "Bản offline chỉ tra được các từ đã có trong danh sách. Cần mạng và bản trên claude.ai để tra từ mới." : "Cần mở phần mềm trong claude.ai và đăng nhập để tra từ mới." }; refreshSheets(); return true; }
@@ -948,7 +948,7 @@ Nếu ${b.lang === "zh" ? "chữ" : "từ"} đó nằm trong một cụm động
     .then(out => {
       if (!out || !out.w || !out.mean) throw { code: "invalid_json" };
       const res = { w: String(out.w), ipa: String(out.ipa || ""), pos: String(out.pos || ""), mean: String(out.mean), ex: String(out.ex || ""), note: String(out.note || "") };
-      tapCache[key] = res; if (state.tap === mine) { state.tap = { word: w.word, res }; if (norm(res.w) !== norm(w.word)) speakWordNow(res.w); }
+      tapCache[key] = res; if (state.tap === mine) state.tap = { word: w.word, res };
     })
     .catch(err => { if (state.tap === mine) state.tap = { word: w.word, msg: errVi(err) }; })
     .finally(() => refreshSheets());
@@ -1443,7 +1443,7 @@ document.addEventListener("click", e => {
   if (b.dataset.view) { state.view = b.dataset.view; store.set("view", state.view); }
   else if (b.dataset.vk) {
     state.tap = null; state.pop = state.pop === b.dataset.vk ? null : b.dataset.vk;
-    if (state.pop) { const it = items("tu-vung").find(x => x.key === state.pop); if (it) speakWordNow(it.w); }
+    if (state.pop) { const it = items("tu-vung").find(x => x.key === state.pop); if (it) speakWordNow(it.w, it.key); }
   }
   else if (b.id === "closeTap") state.tap = null;
   else if (b.id === "tapAdd") return void addTapWord();

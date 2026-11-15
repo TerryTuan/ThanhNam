@@ -100,3 +100,5 @@ Tab + Thêm có khung "Trang mới sẽ lưu vào cuốn …"; dán trang giốn
 ## Tự đọc khi chạm vào từ
 Chạm vào từ tô màu (bản gốc, cụm tiếng Việt, Kindle) hoặc từ bất kỳ trong bản gốc thì đọc luôn từ tiếng Anh (`speakWordNow`, giọng của thiết bị, gọi ngay trong lần chạm vì iPhone chỉ cho phát âm khi có thao tác người dùng); từ tra bằng Claude trả về cụm khác thì đọc thêm cụm đó.
 Có ô "Tự đọc" trong khung giải nghĩa để tắt/bật (lưu trong localStorage `autoSpeak`).
+
+Sửa 2026-11: chỉ tự đọc TỪ MỚI (mục từ vựng chưa nhớ, tức từ được tô màu). Từ đã nhớ và từ thường chạm vào để tra thì không tự đọc (tránh đọc ngoài ý muốn khi chạm vào chữ); muốn nghe thì bấm nút Nghe. Ô "Tự đọc từ mới" tắt/bật được.

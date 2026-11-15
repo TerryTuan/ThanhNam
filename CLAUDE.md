@@ -96,3 +96,7 @@ Khi người dùng nhắc "xuất bản dịch tiếng Việt": lấy trang mớ
 ## Nhớ cuốn đang đọc và chống dán nhầm cuốn
 `setBook(id)` là cách duy nhất đổi cuốn đang chọn: lưu `book` trong localStorage và trong db riêng của người dùng (tài liệu `data/users/<id>/prefs` với `book`, `at`), nên mở lại hay đổi thiết bị vẫn đúng cuốn cũ (`pullPrefs` khi mở và khi quay lại ứng dụng).
 Tab + Thêm có khung "Trang mới sẽ lưu vào cuốn …"; dán trang giống một trang của cuốn khác thì cảnh báo "dán nhầm cuốn" (nút chuyển sang cuốn đó) trước khi lưu; trang vừa lưu có thể chuyển sang cuốn khác bằng nút "Chuyển trang này sang cuốn đó" (ghi trang vào cuốn đích với số trang kế tiếp rồi xoá bản cũ).
+
+## Tự đọc khi chạm vào từ
+Chạm vào từ tô màu (bản gốc, cụm tiếng Việt, Kindle) hoặc từ bất kỳ trong bản gốc thì đọc luôn từ tiếng Anh (`speakWordNow`, giọng của thiết bị, gọi ngay trong lần chạm vì iPhone chỉ cho phát âm khi có thao tác người dùng); từ tra bằng Claude trả về cụm khác thì đọc thêm cụm đó.
+Có ô "Tự đọc" trong khung giải nghĩa để tắt/bật (lưu trong localStorage `autoSpeak`).

@@ -600,13 +600,17 @@ function markTerms(text, terms) {
   }
   return out + esc(text.slice(i));
 }
+// Chạm vào từ là đọc luôn từ đó (ấn tượng âm thanh giúp nhớ từ mới); tắt được bằng ô "Tự đọc" trong khung giải nghĩa.
+let autoSpeak = store.get("autoSpeak", true);
+const speakWordNow = text => { if (autoSpeak && text) speak(cleanW(text)); };
+const autoSpeakBox = () => `<label class="help" style="align-self:center;display:inline-flex;gap:4px;align-items:center"><input type="checkbox" data-autospeak${autoSpeak ? " checked" : ""}> Tự đọc</label>`;
 function renderSheet(spacer = true) {
   const v = state.pop && items("tu-vung").find(x => x.key === state.pop);
   if (!v) return "";
   return `${spacer ? `<div style="height:260px" aria-hidden="true"></div>` : ""}<div class="sheet" role="dialog" aria-label="Giải nghĩa"><div class="in">
     <div><span class="w" lang="${esc(book().lang)}">${esc(v.w)}</span> <span class="ipa">${esc(v.ipa)}</span> <span class="pos">${esc(v.pos)}</span></div>
     <div style="font-size:1.05rem">${esc(v.mean)}</div><div class="ex" lang="${esc(book().lang)}">${esc(v.ex)}</div>
-    <div class="row"><button data-say="${esc(v.w)}">Nghe</button><button class="good" data-remember="${esc(v.key)}">Đã nhớ, không tô màu nữa</button><button id="closePop">Đóng</button></div>
+    <div class="row"><button data-say="${esc(v.w)}">Nghe</button>${autoSpeakBox()}<button class="good" data-remember="${esc(v.key)}">Đã nhớ, không tô màu nữa</button><button id="closePop">Đóng</button></div>
   </div></div>`;
 }
 
@@ -929,10 +933,11 @@ function tapAt(e, pEl) {
   const { raw, rel } = sentenceAround(pEl, w.node, w.off), sentence = raw.trim();
   // Từ hoặc cụm đã có trong danh sách (kể cả đã nhớ): mở luôn phần giải nghĩa có sẵn, không cần hỏi Claude.
   for (const it of items("tu-vung")) for (const m of raw.matchAll(wordRegex(it.w, b.lang))) if (rel >= m.index && rel < m.index + m[0].length) {
-    state.tap = null; state.pop = it.key; refreshSheets(); return true;
+    state.tap = null; state.pop = it.key; speakWordNow(it.w); refreshSheets(); return true;
   }
   state.pop = null;
   const key = w.word.toLowerCase() + "|" + sentence.slice(0, 80);
+  speakWordNow(w.word); // đọc ngay trong lần chạm (iPhone chỉ cho phát âm khi có thao tác của người dùng)
   if (tapCache[key]) { state.tap = { word: w.word, res: tapCache[key] }; refreshSheets(); return true; }
   state.tap = { word: w.word, busy: true }; refreshSheets();
   if (!sample) { state.tap = { word: w.word, msg: OFFLINE ? "Bản offline chỉ tra được các từ đã có trong danh sách. Cần mạng và bản trên claude.ai để tra từ mới." : "Cần mở phần mềm trong claude.ai và đăng nhập để tra từ mới." }; refreshSheets(); return true; }
@@ -943,7 +948,7 @@ Nếu ${b.lang === "zh" ? "chữ" : "từ"} đó nằm trong một cụm động
     .then(out => {
       if (!out || !out.w || !out.mean) throw { code: "invalid_json" };
       const res = { w: String(out.w), ipa: String(out.ipa || ""), pos: String(out.pos || ""), mean: String(out.mean), ex: String(out.ex || ""), note: String(out.note || "") };
-      tapCache[key] = res; if (state.tap === mine) state.tap = { word: w.word, res };
+      tapCache[key] = res; if (state.tap === mine) { state.tap = { word: w.word, res }; if (norm(res.w) !== norm(w.word)) speakWordNow(res.w); }
     })
     .catch(err => { if (state.tap === mine) state.tap = { word: w.word, msg: errVi(err) }; })
     .finally(() => refreshSheets());
@@ -956,7 +961,7 @@ function renderTapSheet(spacer = true) {
     : t.msg ? `<div><span class="w" lang="${L}">${esc(t.word)}</span></div><div class="status err">${esc(t.msg)}</div><div class="row"><button id="closeTap">Đóng</button></div>`
     : `<div><span class="w" lang="${L}">${esc(r.w)}</span> <span class="ipa">${esc(r.ipa)}</span> <span class="pos">${esc(r.pos)}</span></div><div style="font-size:1.05rem">${esc(r.mean)}</div>
        ${r.ex ? `<div class="ex" lang="${L}">${esc(r.ex)}</div>` : ""}${r.note ? `<div class="help">${esc(r.note)}</div>` : ""}
-       <div class="row"><button data-say="${esc(r.w)}">Nghe</button>${t.added ? `<span class="help" style="align-self:center">Đã thêm vào danh sách</span>` : db && isOwner ? `<button class="good" id="tapAdd">Thêm vào danh sách cần nhớ</button>` : ""}<button id="closeTap">Đóng</button></div>`;
+       <div class="row"><button data-say="${esc(r.w)}">Nghe</button>${autoSpeakBox()}${t.added ? `<span class="help" style="align-self:center">Đã thêm vào danh sách</span>` : db && isOwner ? `<button class="good" id="tapAdd">Thêm vào danh sách cần nhớ</button>` : ""}<button id="closeTap">Đóng</button></div>`;
   return `${spacer ? `<div style="height:260px" aria-hidden="true"></div>` : ""}<div class="sheet tapsheet" role="dialog" aria-label="Tra từ"><div class="in">${inner}</div></div>`;
 }
 async function addTapWord() {
@@ -1436,7 +1441,10 @@ document.addEventListener("click", e => {
   if (b.id === "clearDraft") { state.draft = ""; store.set("draft", ""); state.file = null; state.result = null; state.msg = ""; state.focusAdd = true; }
   if (b.id === "stop") return state.ctl && state.ctl.abort();
   if (b.dataset.view) { state.view = b.dataset.view; store.set("view", state.view); }
-  else if (b.dataset.vk) { state.tap = null; state.pop = state.pop === b.dataset.vk ? null : b.dataset.vk; }
+  else if (b.dataset.vk) {
+    state.tap = null; state.pop = state.pop === b.dataset.vk ? null : b.dataset.vk;
+    if (state.pop) { const it = items("tu-vung").find(x => x.key === state.pop); if (it) speakWordNow(it.w); }
+  }
   else if (b.id === "closeTap") state.tap = null;
   else if (b.id === "tapAdd") return void addTapWord();
   else if (b.dataset.remember) { toggleKnown(b.dataset.remember, true); state.pop = null; }
@@ -1472,6 +1480,7 @@ document.addEventListener("click", e => {
   render();
 });
 document.addEventListener("change", e => {
+  if (e.target.matches && e.target.matches("[data-autospeak]")) { autoSpeak = e.target.checked; store.set("autoSpeak", autoSpeak); try { if (!autoSpeak) speechSynthesis.cancel(); } catch (err) {} document.querySelectorAll("[data-autospeak]").forEach(x => { x.checked = autoSpeak; }); }
   if (e.target.matches && e.target.matches("[data-ttsvoice]")) { store.set("ttsVoice", e.target.value); document.querySelectorAll("[data-ttsvoice]").forEach(x => { x.value = e.target.value; }); }
 });
 try { speechSynthesis.addEventListener("voiceschanged", () => { if (!ttsId) render(); }); } catch (e) {}

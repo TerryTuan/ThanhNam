@@ -102,3 +102,5 @@ Chạm vào từ tô màu (bản gốc, cụm tiếng Việt, Kindle) hoặc t�
 Có ô "Tự đọc" trong khung giải nghĩa để tắt/bật (lưu trong localStorage `autoSpeak`).
 
 Sửa 2026-11: chỉ tự đọc TỪ MỚI (mục từ vựng chưa nhớ, tức từ được tô màu). Từ đã nhớ và từ thường chạm vào để tra thì không tự đọc (tránh đọc ngoài ý muốn khi chạm vào chữ); muốn nghe thì bấm nút Nghe. Ô "Tự đọc từ mới" tắt/bật được.
+
+Sửa 2026-11 (lần 2): chạm vào từ thường mặc định KHÔNG làm gì (không mở khung, không gọi Claude), để khỏi cắt ngang lúc đọc. Chỉ từ tô màu (từ mới) phản hồi khi chạm. Ai cần tra từ bất kỳ thì bật nút "Tra từ thường" (`tapLookup`, lưu trong localStorage); chế độ Kindle có nút "Chạm để tra" riêng (`rdLookup`), mặc định tắt.

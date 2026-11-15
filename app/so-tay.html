@@ -130,7 +130,7 @@ nav.tabs a[hidden] { display: none; }
 
 /* Chạm vào từ bản gốc để tra */
 #view p[lang], #rdContent p[lang] { cursor: pointer; -webkit-tap-highlight-color: rgba(31, 111, 139, .15); }
-#rdLookup[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+#tapToggle[aria-pressed="true"], #rdLookup[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
 
 #errbar { position: fixed; left: 8px; right: 8px; top: calc(8px + env(safe-area-inset-top, 0px)); z-index: 60; display: flex; gap: 8px; align-items: center; justify-content: space-between; background: var(--wrong-soft); color: var(--ink); border: 1px solid var(--wrong); border-radius: 10px; padding: 8px 12px; font-size: .85rem; overflow-wrap: anywhere; }
 #errbar[hidden] { display: none; }
@@ -602,6 +602,9 @@ function markTerms(text, terms) {
 }
 // Chạm vào từ là đọc luôn từ đó (ấn tượng âm thanh giúp nhớ từ mới); tắt được bằng ô "Tự đọc" trong khung giải nghĩa.
 let autoSpeak = store.get("autoSpeak", true);
+// Chạm vào từ thường (không tô màu) mặc định KHÔNG làm gì để khỏi cắt ngang lúc đọc; bật "Tra từ thường" khi cần tra một từ bất kỳ.
+let tapLookup = store.get("tapLookup", false);
+const tapToggleBtn = () => `<button id="tapToggle" aria-pressed="${tapLookup}" title="Bật để chạm vào từ thường là tra nghĩa">Tra từ thường: ${tapLookup ? "Bật" : "Tắt"}</button>`;
 // Chỉ tự đọc TỪ MỚI (mục từ vựng chưa nhớ); từ đã nhớ và từ thường chạm vào để tra thì không tự đọc, muốn nghe bấm nút Nghe.
 const speakWordNow = (text, key) => { if (autoSpeak && text && !(key && known.has(key))) speak(cleanW(text)); };
 const autoSpeakBox = () => `<label class="help" style="align-self:center;display:inline-flex;gap:4px;align-items:center"><input type="checkbox" data-autospeak${autoSpeak ? " checked" : ""}> Tự đọc từ mới</label>`;
@@ -631,7 +634,7 @@ function renderReading() {
   const jump = b.pages.length > 3 ? `<select id="jump" aria-label="Đi tới trang"><option value="">Đi tới trang…</option>${b.pages.map(p => `<option value="${p.n}">Trang ${pad(p.n)}</option>`).join("")}</select>` : "";
   return ttsSettings() + `<div class="toolbar"><button class="primary" id="openReader">Đọc kiểu Kindle</button>${b.pages.length > 1 ? `<button data-viewpage="${b.pages[b.pages.length - 1].n}">Trang mới nhất</button>` : ""}${jump}<span class="seg" role="group" aria-label="Hiển thị">
       <button data-view="both" aria-pressed="${vw === "both"}">Song ngữ</button><button data-view="src" aria-pressed="${vw === "src"}">Bản gốc</button><button data-view="vi" aria-pressed="${vw === "vi"}">Bản dịch</button><button data-view="flow" aria-pressed="${vw === "flow"}">Liền mạch</button></span>
-      <span class="stat">${b.pages.length} trang · ${left} từ mới chưa nhớ</span></div>${vw !== "vi" ? `<p class="help" style="font-size:.82rem;color:var(--muted);margin:-6px 0 12px">Mẹo: chạm vào bất kỳ từ nào trong bản gốc để tra ngay.</p>` : ""}` +
+      <span class="stat">${b.pages.length} trang · ${left} từ mới chưa nhớ</span></div>${vw !== "vi" ? `<div class="row" style="margin:-4px 0 12px;align-items:center"><span class="help" style="font-size:.82rem;color:var(--muted)">Chạm vào từ tô màu để xem nghĩa.</span>${tapToggleBtn()}</div>` : ""}` +
     (vw === "flow" ? `<p class="help" style="font-size:.82rem;color:var(--muted);margin:-6px 0 12px">Chỉ tiếng Việt, đọc liền như một cuốn sách. Từ mới chưa nhớ vẫn tô màu, chạm vào để xem từ gốc.</p>` + renderFlow(b) : b.pages.map(p => `<article class="page" id="p-${p.n}"><div class="page-head"><span class="label">Trang ${pad(p.n)}${p.label ? ` · trang sách ${esc(p.label)}` : ""}</span><span class="pg">${esc(p.date || "")}</span></div>
       ${vw !== "vi" ? `<div class="src">${(p.source || []).map(t => `<p lang="${esc(b.lang)}">${markNew(t, vocab, b.lang)}</p>`).join("")}</div>` : ""}
       ${vw !== "src" ? (p.translation || []).map(t => `<p>${markVi(t, viTerms(p))}</p>`).join("") + listenRow(b, p.n) : ""}
@@ -975,6 +978,7 @@ document.addEventListener("click", e => {
   const pEl = e.target.closest("p[lang]");
   if (!pEl || !pEl.closest("#view") || e.target.closest("[data-vk], button, a, .sheet")) return;
   if (tab() !== "ban-dich" && tab() !== "them-trang") return;
+  if (!tapLookup) return; // đang tắt "Tra từ thường": chạm vào chữ thường không làm gì
   tapAt(e, pEl);
 });
 function renderStudy(kind) {
@@ -1062,7 +1066,7 @@ function renderAdd() {
       : `<div class="status warn" role="alert"><b>Trang này đã dịch rồi.</b> Nội dung giống ${state.dup.pct}% với <b>Trang ${pad(state.dup.n)}</b> của sách này, nên chưa lưu thêm.
       <div class="row" style="margin-top:8px"><button data-viewpage="${state.dup.n}">Xem Trang ${pad(state.dup.n)}</button><button id="dupForce">Vẫn lưu thành trang mới</button><button id="dupCancel">Bỏ qua</button></div></div>`) : ""}
     ${state.msg ? `<div class="status${state.err ? " err" : ""}" id="status">${esc(state.msg)}</div>` : ""}
-    ${r ? `<article class="result page"><div class="page-head"><span class="label">${state.result ? "Đã lưu" : "Trang mới nhất"} · Trang ${pad(r.n)}${r.label ? ` · trang sách ${esc(r.label)}` : ""}</span><span class="pg">Bấm vào từ tô màu để xem nghĩa</span></div>
+    ${r ? `<article class="result page"><div class="page-head"><span class="label">${state.result ? "Đã lưu" : "Trang mới nhất"} · Trang ${pad(r.n)}${r.label ? ` · trang sách ${esc(r.label)}` : ""}</span><span class="pg">Chạm từ tô màu để xem nghĩa</span></div><div class="row" style="margin-bottom:8px">${tapToggleBtn()}</div>
       ${Array.from({ length: Math.max(src.length, vi.length) }, (_, i) => `
         ${src[i] ? `<div class="src"><p lang="${L}">${markNew(src[i], vocab, b.lang)}</p></div>` : ""}
         ${vi[i] ? `<p>${markVi(vi[i], vt)}</p>` : ""}`).join("")}
@@ -1463,6 +1467,7 @@ document.addEventListener("click", e => {
   else if (b.id === "lookupAdd") return void lookupAdd();
   else if (b.dataset.delword) { db.collection("words").doc(b.dataset.delword).delete().catch(() => {}); return; }
   else if (b.dataset.switchbook) { setBook(b.dataset.switchbook); state.dup = null; state.result = null; state.game = null; }
+  else if (b.id === "tapToggle") { tapLookup = !tapLookup; store.set("tapLookup", tapLookup); if (!tapLookup) state.tap = null; }
   else if (b.id === "moveGo") return void movePage();
   else if (b.id === "errClose") { const el = document.getElementById("errbar"); if (el) el.hidden = true; return; }
   else if (b.id === "errRetry") { state.game = null; state.deck = null; }

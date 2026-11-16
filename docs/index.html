@@ -151,6 +151,12 @@ label.attach { display: inline-block; cursor: pointer; font-size: .85rem; color:
 /* Nút nổi: lên đầu / đến trang cuối trong tab Bản dịch */
 #fab { position: fixed; right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 8; display: grid; gap: 8px; }
 #fab[hidden] { display: none; }
+/* Nút riêng ở góc trái dưới: nhảy tới ô dán trang mới, và quay về chỗ đang đọc */
+#fab2 { position: fixed; left: max(12px, env(safe-area-inset-left, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 8; display: grid; gap: 8px; justify-items: start; }
+#fab2[hidden], #fab2 button[hidden] { display: none; }
+#fab2 button { box-shadow: 0 2px 10px rgba(10, 20, 30, .22); border-radius: 20px; padding: 9px 15px; font-weight: 600; }
+#fab2 #goPaste { background: var(--known); border-color: var(--known); color: var(--bg); }
+.page { scroll-margin-top: 150px; }
 #fab button { box-shadow: 0 2px 10px rgba(10, 20, 30, .22); border-radius: 20px; padding: 8px 14px; font-weight: 600; }
 #fab #toEnd { background: var(--accent); border-color: var(--accent); color: var(--bg); }
 
@@ -224,6 +230,7 @@ details.hard li { margin-bottom: 8px; }
   </div>
 </header>
 <main><div class="wrap" id="view"></div></main>
+<div id="fab2" hidden><button id="goRead" hidden>↩ Về chỗ đang đọc</button><button id="goPaste">＋ Dán trang mới</button></div>
 <div id="fab" hidden><button id="toTop" aria-label="Lên đầu trang">↑ Đầu</button><button id="toEnd" aria-label="Đến trang cuối cùng">Trang cuối ↓</button></div>
 <div id="reader" hidden>
   <div class="rd-bar"><button id="closeReader">Đóng</button>
@@ -333,7 +340,7 @@ let REPO_BOOKS = /*__DATA__*/[];
 // Bản offline (xuất bằng tools/build.py --offline): không có claude.ai nên không dịch trang mới, không tra từ mới; đọc, ôn tập, trò chơi vẫn dùng được.
 // PWA = bản cài lên màn hình chính, chạy hoàn toàn offline: mã ứng dụng không chứa sách; người dùng nhập tệp dữ liệu một lần, sách và tiến độ lưu trong IndexedDB của thiết bị.
 const PWA = true;
-const OFFLINE = /*__OFFLINE__*/false || PWA, BUILT = "2026-11-15", SEED = /*__SEED__*/null;
+const OFFLINE = /*__OFFLINE__*/false || PWA, BUILT = "2026-11-16", SEED = /*__SEED__*/null;
 let assets = null, dbPages = [], dbWords = [], db = null, sample = null, isOwner = false, canImage = false;
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
@@ -1458,6 +1465,8 @@ function renderCore() {
     showErr(err);
   }
   refreshListen();
+  if (state.restore && tab() === "ban-dich") { const id = "p-" + state.restore.n; if (document.getElementById(id)) { state.scrollTo = id; state.restore = null; } }
+  updateFab2();
   const gt = document.getElementById("gtype"); if (gt && !gt.disabled) gt.focus();
   const d = document.getElementById("draft");
   if (d) d.oninput = () => { state.draft = d.value; store.set("draft", d.value); };
@@ -1506,6 +1515,8 @@ document.addEventListener("click", e => {
   if (b.id === "retryAnalyze") { const bk = book(); return analyze(state.result || (bk && bk.pages[bk.pages.length - 1])); }
   if (b.id === "fsUp" || b.id === "fsDown") { rs = Math.round(Math.max(0.8, Math.min(1.8, rs + (b.id === "fsUp" ? 0.1 : -0.1))) * 10) / 10; store.set("rs", rs); return applyRs(); }
   if (b.id === "importBtn") return void document.getElementById("importFile").click();
+  if (b.id === "goPaste") { state.focusAdd = true; if (tab() === "them-trang") { state.pop = null; render(); window.scrollTo(0, 0); } else location.hash = "#them-trang"; return; }
+  if (b.id === "goRead") { goRestore(readPos()); location.hash = "#ban-dich"; return; }
   if (b.id === "openReader") return openReader();
   if (b.id === "toTop") return window.scrollTo(0, 0);
   if (b.id === "toEnd") { const bk = book(), last = bk && bk.pages[bk.pages.length - 1], el = last && document.getElementById("p-" + last.n); return el ? el.scrollIntoView({ block: "start" }) : undefined; }
@@ -1570,7 +1581,8 @@ document.getElementById("bookSel").onchange = e => {
   state.book = e.target.value; state.deck = null; state.game = null; state.pop = null; state.tap = null; state.result = null; state.dup = null; state.msg = "";
   if (state.book === "__new") { if (location.hash !== "#them-trang") return void (location.hash = "#them-trang"); }
   else setBook(state.book);
-  render();
+  if (tab() === "ban-dich") goRestore(readPos());
+  render(); if (!state.restore && tab() === "ban-dich") window.scrollTo(0, 0);
 };
 // Trình duyệt không cho trang tự đọc bộ nhớ tạm, nên bắt sự kiện Dán của người dùng (chữ hoặc ảnh) ở bất cứ đâu trong tab.
 document.addEventListener("paste", e => {
@@ -1598,6 +1610,31 @@ document.addEventListener("paste", e => {
   if (db) db.collection("pages").onSnapshot(snap => { dbPages = snap.docs.map(x => ({ ...x.data(), dbId: x.id })); render(); }, () => {});
   render();
 })();
+// ---- Nút riêng "Dán trang mới" / "Về chỗ đang đọc" và nhớ chỗ đang đọc trong tab Bản dịch ----
+function readPos() { const b = book(); return b ? (store.get("pos", {})[b.id] || null) : null; }
+function saveReadPos(n) { const b = book(); if (!b) return; const all = store.get("pos", {}); all[b.id] = { n, at: Date.now() }; store.set("pos", all); }
+function currentReadPage() {
+  const hdr = document.querySelector("header"), top = (hdr ? hdr.getBoundingClientRect().bottom : 0) + 6;
+  let cur = null;
+  for (const el of document.querySelectorAll("#view article.page, #view .flow .anchor")) { if (el.getBoundingClientRect().top <= top) cur = el; else break; }
+  return cur ? +cur.id.replace("p-", "") : null;
+}
+let posTimer = null;
+function updateFab2() {
+  const f = document.getElementById("fab2"); if (!f) return;
+  const t = tab(), gp = document.getElementById("goPaste"), gr = document.getElementById("goRead");
+  gp.hidden = OFFLINE || (t === "them-trang" && window.scrollY < 160); // ở đầu tab Thêm thì ô dán đã hiện sẵn
+  gr.hidden = OFFLINE || t !== "them-trang";
+  if (!gr.hidden) { const pos = readPos(); gr.textContent = pos ? `↩ Về chỗ đang đọc (trang ${pad(pos.n)})` : "↩ Về chỗ đang đọc"; }
+  f.hidden = state.rdOpen || !!state.pop || !!state.tap || !book() || (gp.hidden && gr.hidden);
+}
+addEventListener("scroll", () => {
+  updateFab2();
+  if (tab() !== "ban-dich" || state.rdOpen || state.restore) return;
+  clearTimeout(posTimer); posTimer = setTimeout(() => { const n = currentReadPage(); if (n != null) saveReadPos(n); }, 350);
+}, { passive: true });
+function goRestore(pos) { state.restore = pos || null; if (pos) setTimeout(() => { state.restore = null; }, 4000); }
+
 // ---- Bản PWA: nạp sách từ IndexedDB, nhập tệp dữ liệu, đăng ký service worker ----
 async function importData(file) {
   try {
@@ -1625,9 +1662,10 @@ if (PWA) {
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
   if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(() => {});
 }
-addEventListener("hashchange", () => { if (tab() !== "them-trang") state.focusAdd = false; stopSpeech(); state.flipped = false; state.pop = null; state.tap = null; store.set("tab", tab()); render(); window.scrollTo(0, 0); });
+addEventListener("hashchange", () => { if (tab() === "ban-dich" && !state.restore) goRestore(readPos()); if (tab() !== "them-trang") state.focusAdd = false; stopSpeech(); state.flipped = false; state.pop = null; state.tap = null; store.set("tab", tab()); render(); window.scrollTo(0, 0); });
 if (!location.hash) { const t = store.get("tab", ""); if (["them-trang", "tu-vung", "mau-cau"].includes(t)) location.hash = "#" + t; }
 if (tab() === "them-trang") state.focusAdd = true;
+if (tab() === "ban-dich") goRestore(readPos()); // mở lại ứng dụng: về đúng trang đang đọc
 render();
 </script>
 

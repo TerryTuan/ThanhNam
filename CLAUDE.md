@@ -110,3 +110,7 @@ Khi dán ảnh chụp trang, ảnh được thu nhỏ (tối đa 2000 px, JPEG) 
 Ảnh phục vụ qua `/_blob/<id>`, hiển thị gập lại ("Ảnh gốc của trang") ở tab Bản dịch, tab + Thêm và ở chế độ Liền mạch (chỉ trang có `fig`). Trang cũ chưa có ảnh dùng nút "Gắn ảnh gốc" để thêm sau.
 Bảng được Claude chép thành bảng markdown (hàng `| a | b |`, dòng `|---|---|`) cả ở bản gốc lẫn bản dịch; hình được mô tả thành dòng `[Hình: ...]` / `[Figure: ...]`. Khối bảng giữ nguyên xuống dòng trong `source`/`translation`, `isTable`/`tableHTML`/`paraHTML` hiển thị thành bảng, `flow.js` không nối hay xoá bảng như văn xuôi, các tệp EPUB đổi thành thẻ `<table>`.
 Chưa có: ảnh gốc trong EPUB, bản offline và PWA (chỉ tải được từ claude.ai); lấy ảnh bằng Artifact read với `path` là id asset nếu cần nhúng sau.
+
+## Nút riêng "Dán trang mới" / "Về chỗ đang đọc"
+Góc trái dưới (`#fab2`): nút "＋ Dán trang mới" (`goPaste`) nhảy tới ô dán ở tab + Thêm và đưa con trỏ vào đó; ở tab Thêm chỉ hiện khi đã cuộn xuống (khỏi phải cuộn ngược lên).
+Nút "↩ Về chỗ đang đọc (trang N)" (`goRead`, chỉ ở tab Thêm) quay về tab Bản dịch đúng trang đang đọc. Chỗ đang đọc lưu theo từng cuốn trong localStorage (`pos`: `{id sách: {n, at}}`), cập nhật khi cuộn tab Bản dịch (`currentReadPage`), khôi phục khi vào lại tab, đổi cuốn hoặc mở lại ứng dụng (`state.restore`, `goRestore`).

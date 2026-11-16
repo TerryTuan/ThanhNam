@@ -350,9 +350,11 @@ let REPO_BOOKS = [{"id": "the-foundation-of-winning-golf", "title": "The foundat
 const PWA = /*__PWA__*/false;
 const OFFLINE = /*__OFFLINE__*/false || PWA, BUILT = "/*__BUILT__*/", SEED = /*__SEED__*/null;
 let assets = null, dbPages = [], dbWords = [], db = null, sample = null, isOwner = false, canImage = false;
+// localStorage có thể bị chặn hoặc bị xoá trong khung nhúng của claude.ai, nên giữ thêm bản sao trong bộ nhớ và đồng bộ các khoá "nhớ chỗ đang đọc" lên db riêng của người dùng.
+const memStore = {}, SYNCED = new Set(["rdpos2", "pos", "tab", "view", "rdLang", "rdSize", "rs"]);
 const store = {
-  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
-  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  get(k, d) { if (k in memStore) return memStore[k]; try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v, quiet) { memStore[k] = v; try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} if (!quiet && SYNCED.has(k)) { try { touchPrefs(); } catch (e) {} } }
 };
 const state = { draft: store.get("draft", ""), pageLabel: "", file: null, busy: false, msg: "", err: false, result: null, newTitle: "", newOrig: "", newAuthor: "", confirmDel: null, book: store.get("book", REPO_BOOKS[0] && REPO_BOOKS[0].id), mode: { "tu-vung": "list", "mau-cau": "list" }, filter: "todo", sort: store.get("sort", "freq"), foldOpen: {}, game: null, q: "", deck: null, idx: 0, flipped: false, rdOpen: false, rdLookup: store.get("rdLookup", false), rdLang: store.get("rdLang", "vi"), rdSize: store.get("rdSize", 19), rdPage: 0, rdPages: 1, autoGo: store.get("autoGo", true), pasteHint: false, view: store.get("view", "both"), pop: null };
 const idb = {
@@ -435,22 +437,53 @@ function filtered(kind) {
 }
 // Dấu "đã nhớ": lưu cục bộ ngay, đồng thời đẩy lên db riêng của người dùng để điện thoại và máy tính dùng chung (bản ghi mới hơn thắng).
 // ---- Nhớ cuốn đang đọc: lưu trên máy và trong db riêng của người dùng (dùng chung giữa các thiết bị), mở lại là đúng cuốn đó ----
-let bookAt = store.get("bookAt", 0), prefsTimer = null;
+let bookAt = store.get("bookAt", 0), uiAt = store.get("uiAt", 0), prefsTimer = null, prefsPulled = false;
 const prefsDoc = () => db.collection("data/users/" + uid).doc("prefs");
+function touchPrefs(delay = 1500) { uiAt = Date.now(); store.set("uiAt", uiAt, true); clearTimeout(prefsTimer); prefsTimer = setTimeout(pushPrefs, delay); }
 function setBook(id) {
   state.book = id;
   if (id === "__new") return;
-  store.set("book", id); bookAt = Date.now(); store.set("bookAt", bookAt);
-  clearTimeout(prefsTimer); prefsTimer = setTimeout(pushPrefs, 600);
+  store.set("book", id, true); bookAt = Date.now(); store.set("bookAt", bookAt, true);
+  touchPrefs(600);
 }
-async function pushPrefs() { if (db && uid && state.book !== "__new") try { await prefsDoc().set({ book: state.book, at: bookAt }); } catch (e) {} }
+async function pushPrefs() {
+  if (!db || !uid) return;
+  const book = state.book !== "__new" ? state.book : store.get("book", "");
+  try { await prefsDoc().set({ book, at: bookAt, reader: store.get("rdpos2", {}), pos: store.get("pos", {}), ui: { tab: store.get("tab", "ban-dich"), view: store.get("view", "both"), rdLang: store.get("rdLang", "vi"), rdSize: store.get("rdSize", 19), rs: store.get("rs", 1), at: uiAt } }); } catch (e) {}
+}
+// Gộp bản đồ vị trí: từng mục lấy bản mới hơn (theo at); trả về true nếu bản trên máy có mục mới hơn bản trên db.
+function mergeMap(key, remote) {
+  const local = { ...store.get(key, {}) }; let changed = false, localNewer = false;
+  for (const k in remote || {}) { if (!local[k] || (remote[k].at || 0) > (local[k].at || 0)) { local[k] = { ...remote[k] }; changed = true; } }
+  for (const k in local) if (!remote || !remote[k] || (local[k].at || 0) > (remote[k].at || 0)) localNewer = true;
+  if (changed) store.set(key, local, true);
+  return localNewer;
+}
 async function pullPrefs() {
   if (!db || !uid) return;
   try {
     const snap = await prefsDoc().get(), d = snap.exists ? snap.data() : null;
+    let push = !d, redraw = false;
     if (d && typeof d.book === "string" && d.at > bookAt) {
-      state.book = d.book; store.set("book", d.book); bookAt = d.at; store.set("bookAt", bookAt); state.game = null; state.deck = null; render();
-    } else if (!d || d.at < bookAt) pushPrefs();
+      state.book = d.book; store.set("book", d.book, true); bookAt = d.at; store.set("bookAt", bookAt, true); state.game = null; state.deck = null; redraw = true;
+    } else if (!d || d.at < bookAt) push = true;
+    if (d) {
+      if (mergeMap("rdpos2", d.reader)) push = true;
+      if (mergeMap("pos", d.pos)) push = true;
+      // Thiết lập giao diện (chế độ xem, cỡ chữ, ngôn ngữ Kindle, tab) chỉ nạp một lần khi mở ứng dụng, để không đổi giữa lúc đang đọc.
+      if (!prefsPulled && d.ui && (d.ui.at || 0) > uiAt) {
+        const u = d.ui;
+        if (u.view) { state.view = u.view; store.set("view", u.view, true); }
+        if (u.rdLang) { state.rdLang = u.rdLang; store.set("rdLang", u.rdLang, true); }
+        if (u.rdSize) { state.rdSize = u.rdSize; store.set("rdSize", u.rdSize, true); }
+        if (u.rs) { rs = u.rs; store.set("rs", rs, true); applyRs(); }
+        uiAt = u.at; store.set("uiAt", uiAt, true); redraw = true;
+        if (u.tab && !location.hash && ["them-trang", "tu-vung", "mau-cau"].includes(u.tab)) location.hash = "#" + u.tab;
+      } else if (d.ui && (d.ui.at || 0) < uiAt) push = true;
+    }
+    prefsPulled = true;
+    if (redraw) { if (state.restore === undefined) {} render(); }
+    if (push) pushPrefs();
   } catch (e) {}
 }
 let uid = null, knownAt = store.get("knownAt", 0), knownTimer = null;
@@ -502,7 +535,7 @@ function readyToPaste() {
   if (tab() !== "them-trang" || state.busy || state.rdOpen) return;
   state.focusAdd = true; render();
 }
-document.addEventListener("visibilitychange", () => { if (!document.hidden) { pullKnown(); pullPrefs(); readyToPaste(); } });
+document.addEventListener("visibilitychange", () => { if (document.hidden) { clearTimeout(prefsTimer); pushPrefs(); } else { pullKnown(); pullPrefs(); readyToPaste(); } });
 addEventListener("focus", () => readyToPaste());
 addEventListener("pageshow", () => readyToPaste());
 // ---- Nghe lại bản tiếng Việt (giọng đọc có sẵn của thiết bị) ----
@@ -1377,16 +1410,35 @@ function readerHTML() {
     return `<div class="rd-mark">Trang ${pad(p.n)}${p.label ? ` · trang sách ${esc(p.label)}` : ""}</div>${body}`;
   }).join("");
 }
-function layoutReader(keepFrac) {
+const rdKeyShort = () => (book() ? book().id : "") + ":" + state.rdLang;
+// Chỉ số khối (đoạn, bảng) đầu tiên đang hiện ở trang cột "page" (khối bắt đầu trước hoặc ngay tại đầu trang đó).
+function anchorAt(page) {
+  const c = document.getElementById("rdContent"); if (!c || !c.children.length || !state.rdStep) return null;
+  const start = page * state.rdStep; let idx = 0;
+  for (let i = 0; i < c.children.length; i++) { if (c.children[i].offsetLeft <= start + 2) idx = i; else break; }
+  return idx;
+}
+function readerPosFor() {
+  const m = store.get("rdpos2", {})[rdKeyShort()];
+  if (m) return { i: m.i, f: m.f };
+  const legacy = store.get(rdKey(), 0); // bản cũ chỉ lưu tỉ lệ
+  return typeof legacy === "number" ? legacy : 0;
+}
+function layoutReader(pos) {
   const view = document.getElementById("rdView"), c = document.getElementById("rdContent");
-  const frac = keepFrac != null ? keepFrac : state.rdPages > 1 ? state.rdPage / (state.rdPages - 1) : 0;
+  // Không có vị trí chỉ định (đổi cỡ chữ, xoay màn hình): giữ nguyên đoạn đang đọc.
+  if (pos === undefined && state.rdPages) pos = { i: anchorAt(state.rdPage), f: state.rdPages > 1 ? state.rdPage / (state.rdPages - 1) : 0 };
+  let frac = typeof pos === "number" ? pos : pos && pos.f != null ? pos.f : 0;
+  const anchor = pos && typeof pos === "object" ? pos.i : null;
   const W = view.clientWidth, G = 48;
   c.style.width = W + "px"; c.style.columnWidth = W + "px"; c.style.columnGap = G + "px"; c.style.fontSize = state.rdSize + "px";
   state.rdStep = W + G;
   state.rdPages = Math.max(1, Math.round((c.scrollWidth + G) / state.rdStep));
-  goPage(Math.round(frac * (state.rdPages - 1)), false);
+  let page = Math.round(frac * (state.rdPages - 1));
+  if (anchor != null && c.children[anchor]) page = Math.floor(c.children[anchor].offsetLeft / state.rdStep + 1e-6);
+  goPage(page, false, false); // dựng lại bố cục không được ghi đè vị trí đã lưu
 }
-function goPage(n, anim = true) {
+function goPage(n, anim = true, save = true) {
   const c = document.getElementById("rdContent");
   state.rdPage = Math.max(0, Math.min(state.rdPages - 1, n));
   c.classList.toggle("anim", anim);
@@ -1394,7 +1446,7 @@ function goPage(n, anim = true) {
   const pct = state.rdPages > 1 ? Math.round(state.rdPage / (state.rdPages - 1) * 100) : 100;
   document.getElementById("rdWhere").textContent = `Trang ${state.rdPage + 1} / ${state.rdPages}`;
   document.getElementById("rdPct").textContent = `${pct}%`;
-  store.set(rdKey(), state.rdPages > 1 ? state.rdPage / (state.rdPages - 1) : 0);
+  if (save) { const m = { ...store.get("rdpos2", {}) }; m[rdKeyShort()] = { i: anchorAt(state.rdPage) || 0, f: state.rdPages > 1 ? state.rdPage / (state.rdPages - 1) : 0, at: Date.now() }; store.set("rdpos2", m); }
 }
 function updateReader(frac) {
   const r = document.getElementById("reader");
@@ -1406,14 +1458,14 @@ function updateReader(frac) {
   document.getElementById("rdSheet").innerHTML = renderSheet(false) + renderTapSheet(false);
   layoutReader(frac);
 }
-function openReader() { stopSpeech(); state.rdOpen = true; state.pop = null; updateReader(store.get(rdKey(), 0)); }
+function openReader() { stopSpeech(); state.rdOpen = true; state.pop = null; updateReader(readerPosFor()); }
 document.getElementById("reader").addEventListener("click", e => {
   if (e.target.closest("button, [data-vk], .sheet")) {
     const b = e.target.closest("button");
     if (b && b.id === "rdLookup") { state.rdLookup = !state.rdLookup; store.set("rdLookup", state.rdLookup); b.setAttribute("aria-pressed", state.rdLookup); if (!state.rdLookup) { state.tap = null; state.pop = null; refreshSheets(); } e.stopPropagation(); return; }
     if (b && (b.id === "rdStart" || b.id === "rdEnd")) { e.stopPropagation(); return goPage(b.id === "rdEnd" ? state.rdPages - 1 : 0); }
     if (b && b.id === "closeReader") { state.rdOpen = false; state.pop = null; e.stopPropagation(); return render(); }
-    if (b && b.dataset.rdlang) { state.rdLang = b.dataset.rdlang; store.set("rdLang", state.rdLang); e.stopPropagation(); return updateReader(store.get(rdKey(), 0)); }
+    if (b && b.dataset.rdlang) { state.rdLang = b.dataset.rdlang; store.set("rdLang", state.rdLang); e.stopPropagation(); return updateReader(readerPosFor()); }
     if (b && b.dataset.rdsize) { state.rdSize = Math.max(14, Math.min(28, state.rdSize + 2 * b.dataset.rdsize)); store.set("rdSize", state.rdSize); e.stopPropagation(); return layoutReader(); }
     return; // từ mới, nút trong khung giải nghĩa: để bộ xử lý chung lo
   }
@@ -1629,7 +1681,8 @@ let posTimer = null;
 function updateFab2() {
   const f = document.getElementById("fab2"); if (!f) return;
   const t = tab(), gp = document.getElementById("goPaste"), gr = document.getElementById("goRead");
-  gp.hidden = OFFLINE || (t === "them-trang" && window.scrollY < 160); // ở đầu tab Thêm thì ô dán đã hiện sẵn
+  const reading = t === "ban-dich" || t === "them-trang"; // đang chơi (Từ vựng, Mẫu câu) thì không hiện nút dán trang
+  gp.hidden = OFFLINE || !reading || (t === "them-trang" && window.scrollY < 160); // ở đầu tab Thêm thì ô dán đã hiện sẵn
   gr.hidden = OFFLINE || t !== "them-trang";
   if (!gr.hidden) { const pos = readPos(); gr.textContent = pos ? `↩ Về chỗ đang đọc (trang ${pad(pos.n)})` : "↩ Về chỗ đang đọc"; }
   f.hidden = state.rdOpen || !!state.pop || !!state.tap || !book() || (gp.hidden && gr.hidden);

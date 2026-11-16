@@ -124,3 +124,5 @@ Vị trí Kindle lưu theo mốc đoạn văn (`rdpos2`: `{id sách:ngôn ngữ:
 Nút nổi `#fab2` (Dán trang mới / Về chỗ đang đọc) chỉ hiện ở tab Bản dịch và Thêm; tab Từ vựng, Mẫu câu (kể cả lúc chơi) không hiện.
 
 Cỡ chữ (`rs`, nút A−/A+) áp cho cả `html` (`font-size: calc(16px * var(--rs))`) nên mọi đơn vị rem (ô dán, kết quả dịch, từ vựng, trò chơi) đều theo cùng một cỡ ở mọi tab, kể cả khi hàng nút cỡ chữ bị ẩn ở tab Thêm; `rs` được lưu và đồng bộ qua db riêng (xem mục trên).
+
+Khung giải nghĩa (`.sheet`, `state.pop` / `state.tap`) đóng ngay khi chạm ra ngoài (vào vùng chữ hay nền, không phải nút, từ tô màu hay chính khung): bộ lắng nghe click pha capture ở trước `tapAt`, chặn lần chạm đó để không mở khung khác.

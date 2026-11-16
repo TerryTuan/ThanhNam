@@ -1056,6 +1056,12 @@ async function addTapWord() {
   try { await saveExtraWord(t.res); t.added = true; } catch (e) { t.msg = "Chưa lưu được, thử lại."; }
   refreshSheets();
 }
+// Đang mở khung giải nghĩa: chạm vào chỗ khác trên màn hình (không phải nút, từ tô màu hay chính khung) thì đóng ngay, không làm gì thêm.
+document.addEventListener("click", e => {
+  if (state.rdOpen || !(state.pop || state.tap) || !e.target.closest) return;
+  if (e.target.closest(".sheet, [data-vk], button, a, input, select, textarea, label, summary, nav, #toast")) return;
+  e.stopPropagation(); state.pop = null; state.tap = null; render();
+}, true);
 // Chạm vào đoạn bản gốc (đoạn có thuộc tính lang) ở tab Bản dịch hoặc Thêm.
 document.addEventListener("click", e => {
   if (state.rdOpen || !e.target.closest) return;

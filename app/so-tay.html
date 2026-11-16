@@ -194,6 +194,15 @@ label.attach { display: inline-block; cursor: pointer; font-size: .85rem; color:
 .chip.on { background: var(--accent-soft); border-color: var(--accent); }
 .chip:disabled:not(.on) { opacity: .35; }
 
+.add.compact { gap: 10px; }
+.saveto { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.saveto label { font-weight: 600; }
+.saveto select { font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); min-width: 0; max-width: 100%; }
+.add textarea#draft { min-height: 110px; }
+details.opts summary { cursor: pointer; color: var(--muted); font-size: .85rem; }
+/* Tab Thêm: bỏ hàng tên sách và cỡ chữ ở đầu trang để ô dán lên cao, không bị bàn phím che */
+body.addmode header .book { display: none; }
+body.addmode header .wrap { padding-block-start: 6px; }
 .addto { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 10px; padding: 10px 12px; font-size: .92rem; }
 
 /* Thêm trang */
@@ -1085,21 +1094,18 @@ function renderAdd() {
   const b = book(), next = b ? (b.pages.length ? b.pages[b.pages.length - 1].n + 1 : 1) : 1;
   const r = state.result || (state.book !== "__new" && b && b.pages[b.pages.length - 1]);
   const vocab = items("tu-vung"), vt = viTerms(r), L = esc(b ? b.lang : "en"), src = (r && r.source) || [], vi = (r && r.translation) || [];
-  return `<div class="add">
-    <div class="addto" role="status">Trang mới sẽ lưu vào cuốn <b>${esc(state.book === "__new" ? (state.newTitle.trim() || "sách mới") : b ? b.title : "")}</b>${state.book === "__new" || !b ? "" : ` (trang ${pad(next)})`}. Không đúng cuốn? Đổi ở ô “Sách” bên dưới trước khi dán.</div>
-    <div class="field"><label class="label" for="bookPick">Sách</label>
-      <div class="row"><select id="bookPick">${BOOKS.map(x => `<option value="${esc(x.id)}"${x.id === state.book ? " selected" : ""}>${esc(x.title)}</option>`).join("")}<option value="__new"${state.book === "__new" ? " selected" : ""}>+ Sách mới…</option></select>
-      ${state.book === "__new" ? `<input type="text" id="newTitle" placeholder="Tên sách (tiếng Việt hoặc tên bạn quen gọi)" value="${esc(state.newTitle)}"><input type="text" id="newOrig" placeholder="Tên gốc, ví dụ The World in 2050 (không bắt buộc)" value="${esc(state.newOrig)}"><input type="text" id="newAuthor" placeholder="Tác giả (không bắt buộc)" value="${esc(state.newAuthor)}">` : `<span class="stat">Trang sẽ lưu: ${pad(next)}</span>`}</div></div>
-    <div class="field"><label class="label" for="draft">Nội dung trang (tiếng Anh hoặc tiếng Trung)</label>
-      <div class="row"><button class="primary" id="pasteBtn">Dán và dịch</button>${state.draft || state.file ? `<button id="clearDraft">Xoá ô</button>` : ""}
-        <label class="help"><input type="checkbox" id="autoGo"${state.autoGo ? " checked" : ""}> Tự dịch ngay khi dán</label></div>
-      ${state.pasteHint ? `<div class="status">claude.ai không cho phần mềm tự lấy nội dung bộ nhớ${state.pasteWhy ? ` (${esc(state.pasteWhy)})` : ""}. Chạm vào ô bên dưới, chọn <b>Dán</b> trong bong bóng hiện lên. Phần mềm sẽ tự dịch ngay.</div>` : ""}
-      <textarea id="draft" placeholder="Nhấn giữ vào đây rồi chọn Dán (hoặc Ctrl+V). Dán được cả chữ lẫn ảnh chụp màn hình.">${esc(state.draft)}</textarea>
-      <div class="row">${canImage ? `<label class="help" for="img">Hoặc chọn ảnh chụp trang:</label><input type="file" id="img" accept="image/*">` : ""}
-      <input type="text" id="pageLabel" placeholder="Số trang trong sách (không bắt buộc)" value="${esc(state.pageLabel)}"></div>
-      ${state.file ? `<div class="row"><img class="thumb" id="thumb" alt="Ảnh trang sách"><button id="dropImg">Bỏ ảnh</button></div>` : ""}</div>
-    <div class="row"><button class="primary" id="go"${state.busy ? " disabled" : ""}>${state.busy ? "Đang dịch…" : "Dịch và lưu trang"}</button>${state.busy ? `<button id="stop">Dừng</button>` : ""}
-      <span class="help">Mất khoảng 30–90 giây. Lần đầu Claude sẽ hỏi bạn cho phép.</span></div>
+  return `<div class="add compact">
+    <div class="saveto" role="status"><label for="bookPick">Lưu vào cuốn</label>
+      <select id="bookPick">${BOOKS.map(x => `<option value="${esc(x.id)}"${x.id === state.book ? " selected" : ""}>${esc(x.title)}</option>`).join("")}<option value="__new"${state.book === "__new" ? " selected" : ""}>+ Sách mới…</option></select>
+      ${state.book === "__new" || !b ? "" : `<span class="stat">trang ${pad(next)}</span>`}</div>
+    ${state.book === "__new" ? `<div class="row"><input type="text" id="newTitle" placeholder="Tên sách (tiếng Việt hoặc tên bạn quen gọi)" value="${esc(state.newTitle)}"><input type="text" id="newOrig" placeholder="Tên gốc, ví dụ The World in 2050 (không bắt buộc)" value="${esc(state.newOrig)}"><input type="text" id="newAuthor" placeholder="Tác giả (không bắt buộc)" value="${esc(state.newAuthor)}"></div>` : ""}
+    <textarea id="draft" rows="4" placeholder="Dán trang sách vào đây (chữ hoặc ảnh chụp màn hình)">${esc(state.draft)}</textarea>
+    ${state.pasteHint ? `<div class="status">claude.ai không cho phần mềm tự lấy nội dung bộ nhớ${state.pasteWhy ? ` (${esc(state.pasteWhy)})` : ""}. Chạm vào ô bên dưới, chọn <b>Dán</b> trong bong bóng hiện lên. Phần mềm sẽ tự dịch ngay.</div>` : ""}
+    ${state.file ? `<div class="row"><img class="thumb" id="thumb" alt="Ảnh trang sách"><button id="dropImg">Bỏ ảnh</button></div>` : ""}
+    <div class="row"><button class="primary" id="pasteBtn">Dán và dịch</button><button id="go"${state.busy ? " disabled" : ""}>${state.busy ? "Đang dịch…" : "Dịch"}</button>${state.busy ? `<button id="stop">Dừng</button>` : ""}${state.draft || state.file ? `<button id="clearDraft">Xoá ô</button>` : ""}</div>
+    <label class="help"><input type="checkbox" id="autoGo"${state.autoGo ? " checked" : ""}> Tự dịch ngay khi dán · mất khoảng 30–90 giây</label>
+    <details class="opts"><summary>Tuỳ chọn: ảnh chụp, số trang sách</summary><div class="row" style="margin-top:8px">${canImage ? `<label class="help" for="img">Chọn ảnh chụp trang:</label><input type="file" id="img" accept="image/*">` : ""}
+      <input type="text" id="pageLabel" placeholder="Số trang trong sách (không bắt buộc)" value="${esc(state.pageLabel)}"></div></details>
     ${state.dup ? (state.dup.other
       ? `<div class="status warn" role="alert"><b>Có thể bạn đang dán nhầm cuốn.</b> Nội dung giống ${state.dup.pct}% với <b>Trang ${pad(state.dup.n)}</b> của cuốn “${esc(state.dup.other.title)}”, còn bạn đang chọn cuốn “${esc(b ? b.title : "")}”. Chưa lưu gì cả.
       <div class="row" style="margin-top:8px"><button class="primary" data-switchbook="${esc(state.dup.other.id)}">Chuyển sang cuốn “${esc(state.dup.other.title)}”</button><button id="dupForce">Vẫn lưu vào cuốn này</button><button id="dupCancel">Bỏ qua</button></div></div>`
@@ -1464,6 +1470,7 @@ function renderCore() {
     showErr(err);
   }
   refreshListen();
+  document.body.classList.toggle("addmode", tab() === "them-trang");
   if (state.restore && tab() === "ban-dich") { const id = "p-" + state.restore.n; if (document.getElementById(id)) { state.scrollTo = id; state.restore = null; } }
   updateFab2();
   const gt = document.getElementById("gtype"); if (gt && !gt.disabled) gt.focus();
@@ -1627,6 +1634,13 @@ function updateFab2() {
   if (!gr.hidden) { const pos = readPos(); gr.textContent = pos ? `↩ Về chỗ đang đọc (trang ${pad(pos.n)})` : "↩ Về chỗ đang đọc"; }
   f.hidden = state.rdOpen || !!state.pop || !!state.tap || !book() || (gp.hidden && gr.hidden);
 }
+function keepDraftVisible() {
+  const d = document.getElementById("draft"); if (!d || document.activeElement !== d) return;
+  const vh = window.visualViewport ? window.visualViewport.height : innerHeight, hdr = document.querySelector("header"), top = hdr ? hdr.getBoundingClientRect().bottom : 0, r = d.getBoundingClientRect();
+  if (r.bottom > vh - 8 || r.top < top + 4) window.scrollTo(0, window.scrollY + r.top - top - 12);
+}
+document.addEventListener("focusin", e => { if (e.target.id === "draft") { setTimeout(keepDraftVisible, 120); setTimeout(keepDraftVisible, 450); } });
+if (window.visualViewport) window.visualViewport.addEventListener("resize", () => keepDraftVisible());
 addEventListener("scroll", () => {
   updateFab2();
   if (tab() !== "ban-dich" || state.rdOpen || state.restore) return;

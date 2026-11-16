@@ -114,3 +114,6 @@ Chưa có: ảnh gốc trong EPUB, bản offline và PWA (chỉ tải được t
 ## Nút riêng "Dán trang mới" / "Về chỗ đang đọc"
 Góc trái dưới (`#fab2`): nút "＋ Dán trang mới" (`goPaste`) nhảy tới ô dán ở tab + Thêm và đưa con trỏ vào đó; ở tab Thêm chỉ hiện khi đã cuộn xuống (khỏi phải cuộn ngược lên).
 Nút "↩ Về chỗ đang đọc (trang N)" (`goRead`, chỉ ở tab Thêm) quay về tab Bản dịch đúng trang đang đọc. Chỗ đang đọc lưu theo từng cuốn trong localStorage (`pos`: `{id sách: {n, at}}`), cập nhật khi cuộn tab Bản dịch (`currentReadPage`), khôi phục khi vào lại tab, đổi cuốn hoặc mở lại ứng dụng (`state.restore`, `goRestore`).
+
+## Bố cục gọn của tab + Thêm
+Tab Thêm phải dán được ngay cả khi bàn phím iPhone đang mở: `body.addmode` ẩn hàng tên sách và cỡ chữ ở đầu trang, ô dán (`#draft`) nằm ngay dưới dòng "Lưu vào cuốn [chọn sách] · trang N", nút "Dán và dịch" / "Dịch" nằm dưới ô; ảnh chụp và số trang sách gom trong mục "Tuỳ chọn". `keepDraftVisible` cuộn để ô dán không bị bàn phím che (theo `visualViewport`).

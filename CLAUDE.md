@@ -122,3 +122,5 @@ Tab Thêm phải dán được ngay cả khi bàn phím iPhone đang mở: `body
 Vị trí Kindle lưu theo mốc đoạn văn (`rdpos2`: `{id sách:ngôn ngữ: {i, f, at}}`, `anchorAt`), nên bền khi đổi cỡ chữ; chỉ lưu khi người đọc lật trang (bố cục dựng lại không ghi đè, `goPage(n, anim, save)`).
 `store` giữ thêm bản sao trong bộ nhớ và các khoá `SYNCED` (`rdpos2`, `pos`, `tab`, `view`, `rdLang`, `rdSize`, `rs`) được đẩy lên db riêng (`data/users/<id>/prefs`: `book`, `at`, `reader`, `pos`, `ui`) sau 1,5 giây và khi ứng dụng bị ẩn; `pullPrefs` gộp từng mục theo `at` mới hơn, nên xoá localStorage hay đổi thiết bị vẫn đọc tiếp đúng chỗ.
 Nút nổi `#fab2` (Dán trang mới / Về chỗ đang đọc) chỉ hiện ở tab Bản dịch và Thêm; tab Từ vựng, Mẫu câu (kể cả lúc chơi) không hiện.
+
+Cỡ chữ (`rs`, nút A−/A+) áp cho cả `html` (`font-size: calc(16px * var(--rs))`) nên mọi đơn vị rem (ô dán, kết quả dịch, từ vựng, trò chơi) đều theo cùng một cỡ ở mọi tab, kể cả khi hàng nút cỡ chữ bị ẩn ở tab Thêm; `rs` được lưu và đồng bộ qua db riêng (xem mục trên).

@@ -130,3 +130,5 @@ Khung giải nghĩa (`.sheet`, `state.pop` / `state.tap`) đóng ngay khi chạm
 ## Hình / đồ thị cắt riêng và hiện đúng chỗ
 Khi dán ảnh trang có hình, Claude trả thêm `===FIGBOX===` (mỗi hình một dòng `x0 y0 x1 y1`, thang 0–1000, theo thứ tự các dòng `[Hình: ...]`); `parseBoxes` đổi thành `page.figBox = [{x, y, w, h}]` (tỉ lệ 0–1). `figCrop(p, i)` cắt đúng vùng hình từ ảnh trang đã lưu (`/_blob/<id>`, bằng CSS, không tạo ảnh mới) và hiện ngay dưới dòng `[Hình: ...]` ở tab Bản dịch (song ngữ, tiếng Việt, liền mạch), kết quả tab Thêm và Kindle. Chữ trong hình không dịch.
 Trang cũ có ảnh nhưng chưa có `figBox`: nút "Cắt hình ra khỏi ảnh trang" (`locateFigs`) nhờ Claude tìm vùng hình rồi lưu; trong lúc chưa cắt, ảnh gốc của trang tự mở sẵn thay vì gập lại. Trang không có ảnh gốc thì không có hình để hiện (dùng "Gắn ảnh gốc"). Chưa có trong bản offline/PWA/EPUB.
+
+Trang cũ có ảnh gốc, có dòng `[Hình: ...]` nhưng chưa có `figBox` được cắt tự động (`autoLocate`, lần lượt từng trang, mỗi trang thử một lần mỗi phiên, chỉ chủ sổ tay); ảnh gốc cả trang vẫn gập lại (không tự mở, vì ảnh trắng cao làm trống cả màn hình khi chưa tải xong).

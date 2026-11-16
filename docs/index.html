@@ -678,7 +678,7 @@ function paraHTML(t, { lang = "", cls = "", mark = null, pre = "", figs = null }
   if (isFigCap(t)) return `<p class="figcap">${pre}${esc(t)}</p>` + (figs ? figCrop(figs.p, figs.i++) : "");
   return `<p${cls ? ` class="${cls}"` : ""}${lang ? ` lang="${esc(lang)}"` : ""}>${pre}${mark ? mark(t) : esc(t)}</p>`;
 }
-const figHTML = p => OFFLINE || !p || !p.img || !p.img.id ? "" : `<details class="fig"${p.fig && hasFigCap(p) && !(p.figBox && p.figBox.length) ? " open" : ""}><summary>Ảnh gốc của trang${p.fig ? " (có hình hoặc bảng)" : ""}</summary><img src="/_blob/${esc(p.img.id)}" alt="Ảnh chụp trang sách" loading="lazy"></details>`;
+const figHTML = p => OFFLINE || !p || !p.img || !p.img.id ? "" : `<details class="fig"><summary>Ảnh gốc của trang${p.fig ? " (có hình hoặc bảng)" : ""}</summary><img src="/_blob/${esc(p.img.id)}" alt="Ảnh chụp trang sách" loading="lazy"></details>`;
 const locateBtn = p => !OFFLINE && sample && isOwner && p && p.dbId && p.img && hasFigCap(p) && !(p.figBox && p.figBox.length) ? `<button class="danger" data-locate="${esc(p.dbId)}">Cắt hình ra khỏi ảnh trang</button>` : "";
 const attachBtn = p => !OFFLINE && assets && isOwner && p && p.dbId && !p.img ? `<label class="attach"><span>Gắn ảnh gốc</span><input type="file" accept="image/*" data-attach="${esc(p.dbId)}" hidden></label>` : "";
 function markTerms(text, terms) {
@@ -1344,19 +1344,29 @@ function toast(msg) {
   if (!el) { el = document.createElement("div"); el.id = "toast"; el.setAttribute("role", "status"); document.body.appendChild(el); }
   el.textContent = msg; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { el.hidden = true; }, 3500);
 }
-async function locateFigs(p) {
+// Tự cắt hình cho các trang cũ có ảnh gốc nhưng chưa có figBox: lần lượt từng trang, mỗi trang thử một lần mỗi phiên.
+const figTried = new Set(); let figBusy = false;
+async function autoLocate() {
+  if (figBusy || OFFLINE || !sample || !db || !isOwner) return;
+  const p = dbPages.find(x => x.img && x.img.id && hasFigCap(x) && !(x.figBox && x.figBox.length) && !figTried.has(x.dbId));
+  if (!p) return;
+  figBusy = true; figTried.add(p.dbId);
+  try { await locateFigs(p, true); } finally { figBusy = false; setTimeout(autoLocate, 500); }
+}
+async function locateFigs(p, quiet) {
   if (!p || !sample || !p.img) return;
+  const say = m => { if (!quiet) toast(m); };
   const caps = (p.source || []).concat(p.translation || []).filter(isFigCap).length;
-  toast("Claude đang tìm hình trong ảnh trang…");
+  say("Claude đang tìm hình trong ảnh trang…");
   try {
     const blob = await (await fetch("/_blob/" + p.img.id)).blob(), file = new File([blob], "trang.jpg", { type: blob.type || "image/jpeg" });
     const n = (p.source || []).filter(isFigCap).length || (p.translation || []).filter(isFigCap).length || caps;
     const r = await sample(`Ảnh là một trang sách có ${n} hình/biểu đồ/sơ đồ. Với mỗi hình theo thứ tự từ trên xuống, ghi một dòng: x0 y0 x1 y1 là góc trên trái và góc dưới phải của hình (kèm nhãn của hình, không lấy đoạn văn) trong ảnh, thang 0–1000 (0 0 là góc trên trái ảnh). Chỉ trả về các dòng số, không thêm chữ nào khác.`, { images: [file] });
     const boxes = parseBoxes(r.text);
-    if (!boxes.some(Boolean)) return toast("Chưa tìm thấy hình, thử lại sau.");
+    if (!boxes.some(Boolean)) return say("Chưa tìm thấy hình, thử lại sau.");
     await db.collection("pages").doc(p.dbId).update({ figBox: boxes.map(x => x || { x: 0, y: 0, w: 0, h: 0 }) });
-    toast("Đã cắt hình ra.");
-  } catch (e) { toast("Chưa cắt được hình, thử lại."); }
+    say("Đã cắt hình ra.");
+  } catch (e) { say("Chưa cắt được hình, thử lại."); }
 }
 async function attachImage(dbId, file) {
   toast("Đang tải ảnh lên…");
@@ -1717,7 +1727,7 @@ document.addEventListener("paste", e => {
   pullKnown(); pullPrefs();
   if (s) canImage = !!(await s.limits().catch(() => null))?.images;
   if (db) db.collection("words").onSnapshot(snap => { dbWords = snap.docs.map(x => ({ ...x.data(), dbId: x.id })); render(); }, () => {});
-  if (db) db.collection("pages").onSnapshot(snap => { dbPages = snap.docs.map(x => ({ ...x.data(), dbId: x.id })); render(); }, () => {});
+  if (db) db.collection("pages").onSnapshot(snap => { dbPages = snap.docs.map(x => ({ ...x.data(), dbId: x.id })); render(); setTimeout(autoLocate, 1500); }, () => {});
   render();
 })();
 // ---- Nút riêng "Dán trang mới" / "Về chỗ đang đọc" và nhớ chỗ đang đọc trong tab Bản dịch ----

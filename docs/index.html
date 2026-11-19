@@ -137,6 +137,12 @@ nav.tabs a[hidden] { display: none; }
 .figcrop { position: relative; overflow: hidden; margin: 2px 0 14px; border: 1px solid var(--line); border-radius: 8px; background: #fff; break-inside: avoid; max-width: 100%; }
 .figcrop img { position: absolute; max-width: none; height: auto; }
 .rd-content .figcrop { margin-left: auto; margin-right: auto; }
+#cam { position: fixed; inset: 0; z-index: 90; background: #000; display: flex; flex-direction: column; }
+#cam video { flex: 1; min-height: 0; width: 100%; object-fit: contain; background: #000; }
+#cam .camrow { display: flex; gap: 12px; justify-content: center; align-items: center; padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px)); background: #111; }
+#cam .camrow button { font-size: 1rem; padding: 12px 22px; border-radius: 28px; }
+#cam .camrow .shoot { background: #fff; color: #000; font-weight: 700; padding: 14px 30px; }
+#cam .camnote { color: #ddd; font-size: .8rem; text-align: center; padding: 8px 16px 0; background: #111; }
 p.figcap { font-style: italic; color: var(--muted); border-left: 2px solid var(--line); padding-left: 10px; text-indent: 0; }
 details.fig { margin: 4px 0 12px; }
 details.fig summary { cursor: pointer; color: var(--accent); font-size: .88rem; }
@@ -353,7 +359,7 @@ let REPO_BOOKS = /*__DATA__*/[];
 // Bản offline (xuất bằng tools/build.py --offline): không có claude.ai nên không dịch trang mới, không tra từ mới; đọc, ôn tập, trò chơi vẫn dùng được.
 // PWA = bản cài lên màn hình chính, chạy hoàn toàn offline: mã ứng dụng không chứa sách; người dùng nhập tệp dữ liệu một lần, sách và tiến độ lưu trong IndexedDB của thiết bị.
 const PWA = true;
-const OFFLINE = /*__OFFLINE__*/false || PWA, BUILT = "2026-11-16", SEED = /*__SEED__*/null;
+const OFFLINE = /*__OFFLINE__*/false || PWA, BUILT = "2026-11-19", SEED = /*__SEED__*/null;
 let assets = null, dbPages = [], dbWords = [], db = null, sample = null, isOwner = false, canImage = false;
 // localStorage có thể bị chặn hoặc bị xoá trong khung nhúng của claude.ai, nên giữ thêm bản sao trong bộ nhớ và đồng bộ các khoá "nhớ chỗ đang đọc" lên db riêng của người dùng.
 const memStore = {}, SYNCED = new Set(["rdpos2", "pos", "tab", "view", "rdLang", "rdSize", "rs"]);
@@ -1156,7 +1162,7 @@ function renderAdd() {
     <textarea id="draft" rows="4" placeholder="Dán trang sách vào đây (chữ hoặc ảnh chụp màn hình)">${esc(state.draft)}</textarea>
     ${state.pasteHint ? `<div class="status">claude.ai không cho phần mềm tự lấy nội dung bộ nhớ${state.pasteWhy ? ` (${esc(state.pasteWhy)})` : ""}. Chạm vào ô bên dưới, chọn <b>Dán</b> trong bong bóng hiện lên. Phần mềm sẽ tự dịch ngay.</div>` : ""}
     ${state.file ? `<div class="row"><img class="thumb" id="thumb" alt="Ảnh trang sách"><button id="dropImg">Bỏ ảnh</button></div>` : ""}
-    <div class="row"><button class="primary" id="pasteBtn">Dán và dịch</button><button id="go"${state.busy ? " disabled" : ""}>${state.busy ? "Đang dịch…" : "Dịch"}</button>${state.busy ? `<button id="stop">Dừng</button>` : ""}${state.draft || state.file ? `<button id="clearDraft">Xoá ô</button>` : ""}</div>
+    <div class="row"><button class="primary" id="pasteBtn">Dán và dịch</button>${canImage ? `<button id="camBtn">📷 Chụp trang sách</button>` : ""}<button id="go"${state.busy ? " disabled" : ""}>${state.busy ? "Đang dịch…" : "Dịch"}</button>${state.busy ? `<button id="stop">Dừng</button>` : ""}${state.draft || state.file ? `<button id="clearDraft">Xoá ô</button>` : ""}</div>
     <label class="help"><input type="checkbox" id="autoGo"${state.autoGo ? " checked" : ""}> Tự dịch ngay khi dán · mất khoảng 30–90 giây</label>
     <details class="opts"><summary>Tuỳ chọn: ảnh chụp, số trang sách</summary><div class="row" style="margin-top:8px">${canImage ? `<label class="help" for="img">Chọn ảnh chụp trang:</label><input type="file" id="img" accept="image/*">` : ""}
       <input type="text" id="pageLabel" placeholder="Số trang trong sách (không bắt buộc)" value="${esc(state.pageLabel)}"></div></details>
@@ -1367,6 +1373,36 @@ async function locateFigs(p, quiet) {
     await db.collection("pages").doc(p.dbId).update({ figBox: boxes.map(x => x || { x: 0, y: 0, w: 0, h: 0 }) });
     say("Đã cắt hình ra.");
   } catch (e) { say("Chưa cắt được hình, thử lại."); }
+}
+// Chụp sách giấy ngay trong phần mềm: xem trực tiếp bằng camera, bấm Chụp lấy một khung hình đưa thẳng cho Claude dịch.
+// Ảnh chỉ nằm trong bộ nhớ của trang, KHÔNG được ghi vào Thư viện ảnh của điện thoại. Nếu khung nhúng không cho dùng camera
+// thì dùng ô chọn ảnh có capture (iPhone thường cũng không lưu ảnh đó vào Thư viện) và nhắc người dùng.
+async function openCamera() {
+  if (state.busy) return;
+  const useFile = note => {
+    const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; inp.setAttribute("capture", "environment");
+    inp.onchange = () => { if (inp.files[0]) { state.file = inp.files[0]; state.draft = ""; state.msg = ""; state.autoGo ? translate() : render(); } };
+    if (note) toast(note); inp.click();
+  };
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return useFile("Dùng camera của điện thoại để chụp trang sách.");
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 2560 }, height: { ideal: 1920 } }, audio: false }); }
+  catch (e) { return useFile("Chưa mở được camera trong ứng dụng, dùng camera của điện thoại."); }
+  const ov = document.createElement("div"); ov.id = "cam";
+  ov.innerHTML = `<video playsinline muted autoplay></video><div class="camnote">Ảnh chỉ gửi đi dịch, không lưu vào Thư viện ảnh của bạn.</div><div class="camrow"><button id="camCancel">Huỷ</button><button class="shoot" id="camShoot">Chụp</button></div>`;
+  document.body.appendChild(ov);
+  const v = ov.querySelector("video"); v.srcObject = stream; v.play().catch(() => {});
+  const close = () => { stream.getTracks().forEach(t => t.stop()); ov.remove(); };
+  ov.querySelector("#camCancel").onclick = close;
+  ov.querySelector("#camShoot").onclick = () => {
+    if (!v.videoWidth) return;
+    const cv = document.createElement("canvas"); cv.width = v.videoWidth; cv.height = v.videoHeight; cv.getContext("2d").drawImage(v, 0, 0);
+    cv.toBlob(blob => {
+      close(); if (!blob) return;
+      state.file = new File([blob], "trang.jpg", { type: "image/jpeg" }); state.draft = ""; state.msg = ""; state.pasteHint = false;
+      state.autoGo ? translate() : render();
+    }, "image/jpeg", 0.9);
+  };
 }
 async function attachImage(dbId, file) {
   toast("Đang tải ảnh lên…");
@@ -1641,6 +1677,7 @@ document.addEventListener("click", e => {
   if (b.id === "toTop") return window.scrollTo(0, 0);
   if (b.id === "toEnd") { const bk = book(), last = bk && bk.pages[bk.pages.length - 1], el = last && document.getElementById("p-" + last.n); return el ? el.scrollIntoView({ block: "start" }) : undefined; }
   if (b.id === "pasteBtn") return pasteFromClipboard();
+  if (b.id === "camBtn") return openCamera();
   if (b.id === "clearDraft") { state.draft = ""; store.set("draft", ""); state.file = null; state.result = null; state.msg = ""; state.focusAdd = true; }
   if (b.id === "stop") return state.ctl && state.ctl.abort();
   if (b.dataset.view) { state.view = b.dataset.view; store.set("view", state.view); }

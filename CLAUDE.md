@@ -132,3 +132,7 @@ Khi dán ảnh trang có hình, Claude trả thêm `===FIGBOX===` (mỗi hình m
 Trang cũ có ảnh nhưng chưa có `figBox`: nút "Cắt hình ra khỏi ảnh trang" (`locateFigs`) nhờ Claude tìm vùng hình rồi lưu; trong lúc chưa cắt, ảnh gốc của trang tự mở sẵn thay vì gập lại. Trang không có ảnh gốc thì không có hình để hiện (dùng "Gắn ảnh gốc"). Chưa có trong bản offline/PWA/EPUB.
 
 Trang cũ có ảnh gốc, có dòng `[Hình: ...]` nhưng chưa có `figBox` được cắt tự động (`autoLocate`, lần lượt từng trang, mỗi trang thử một lần mỗi phiên, chỉ chủ sổ tay); ảnh gốc cả trang vẫn gập lại (không tự mở, vì ảnh trắng cao làm trống cả màn hình khi chưa tải xong).
+
+## Chụp sách giấy trong phần mềm (không lưu vào Thư viện ảnh)
+Tab + Thêm có nút "📷 Chụp trang sách" (`openCamera`, cần `sample` có `images`): mở khung xem trực tiếp bằng camera sau (`getUserMedia`, lớp phủ `#cam`), bấm "Chụp" lấy một khung hình thành `File` trong bộ nhớ trang (`state.file`) rồi dịch ngay nếu bật "Tự dịch ngay khi dán"; ảnh không đi qua Thư viện ảnh của điện thoại.
+Nếu khung nhúng của claude.ai không cho dùng camera thì dùng ô chọn ảnh có `capture="environment"` và nhắc người dùng. Ảnh trang vẫn được lưu trong kho `assets` của sổ tay (không phải Thư viện ảnh) để xem lại hình/bảng; muốn bỏ ảnh thì nút "Bỏ ảnh" trước khi dịch.

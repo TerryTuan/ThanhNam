@@ -1494,9 +1494,10 @@ async function translate(force) {
     try { reply = await ask([await shrinkFile(state.file)]); }
     catch (e1) {
       // Ảnh bị từ chối (quá lớn, định dạng lạ): thử lại một lần với ảnh nhỏ hơn, ép về JPEG.
-      if (!hasImage || !e1 || !["invalid_request", "image_rejected", "transform_error"].includes(e1.code) || e1.text) throw e1;
+      if (!hasImage || !e1 || !["invalid_request", "image_rejected", "transform_error"].includes(e1.code)) throw e1;
+      state.msg = "Claude đang đọc lại ảnh nhỏ hơn…"; render();
       const small = await shrinkFile(state.file, 1100, 0.7, true);
-      try { reply = await ask([small]); } catch (e2) { e2.message = `${e2.message || ""} [ảnh ${Math.round(small.size / 1024)} KB ${small.type || "?"}, gốc ${Math.round(state.file.size / 1024)} KB ${state.file.type || "?"}]`; throw e2; }
+      try { reply = await ask([small]); } catch (e2) { e2.message = `${e2.message || ""} [lần 1: ${e1.message || e1.code}${e1.text ? ", đã viết " + e1.text.length + " ký tự" : ""}; ảnh ${Math.round(small.size / 1024)} KB ${small.type || "?"}, gốc ${Math.round(state.file.size / 1024)} KB ${state.file.type || "?"}]`; throw e2; }
     }
     const out = parseTagged(reply.text);
     if (!out.translation.length || !out.source.length) throw { code: reply.truncated ? "truncated" : "invalid_json" };

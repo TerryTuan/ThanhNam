@@ -142,3 +142,5 @@ Mỗi cuốn có thể có ảnh bìa: collection `books`, id = id sách, `{cove
 `coverHTML` cắt bìa bằng CSS; hiện thẻ sách (bìa + tên + tác giả, `bookCard`) ở đầu tab Bản dịch và làm trang đầu của chế độ Kindle (`readerHTML`, `.rd-cover`). Chưa có trong bản offline/PWA/EPUB (ảnh chỉ tải được từ claude.ai); thêm bìa làm các mốc `rdpos2.i` của Kindle lệch một khối một lần.
 
 Ảnh gửi cho Claude (`sample`) luôn qua `shrinkFile` (tối đa 1600 px, JPEG 0.8): ảnh chụp thẳng từ camera rất lớn làm lời gọi bị từ chối với lỗi "invalid_request" (không dịch được). Ảnh lưu vào `assets` vẫn tối đa 2000 px (`packImage`).
+
+Dịch ảnh bị `invalid_request` / `image_rejected` thì tự thử lại một lần với ảnh nhỏ hơn (1100 px, JPEG 0.7); thông báo lỗi hiện thêm `message` và kích cỡ/định dạng ảnh để chẩn đoán (nhờ người dùng chụp màn hình dòng này).

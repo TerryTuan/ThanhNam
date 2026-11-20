@@ -140,3 +140,5 @@ Nếu khung nhúng của claude.ai không cho dùng camera thì dùng ô chọn 
 ## Bìa sách
 Mỗi cuốn có thể có ảnh bìa: collection `books`, id = id sách, `{cover: {id, w, h, box?}, at}` (`id` là ảnh trong kho `assets`, `box` là khung bìa `{x, y, w, h}` tỉ lệ 0–1 do Claude tìm trong ảnh chụp; không có box thì dùng cả ảnh). Ở tab + Thêm, mục "Tuỳ chọn" có "📘 Chụp bìa sách" (dùng camera trong phần mềm, `openCamera(saveCover)`, không lưu vào Thư viện ảnh) và "Chọn ảnh bìa".
 `coverHTML` cắt bìa bằng CSS; hiện thẻ sách (bìa + tên + tác giả, `bookCard`) ở đầu tab Bản dịch và làm trang đầu của chế độ Kindle (`readerHTML`, `.rd-cover`). Chưa có trong bản offline/PWA/EPUB (ảnh chỉ tải được từ claude.ai); thêm bìa làm các mốc `rdpos2.i` của Kindle lệch một khối một lần.
+
+Ảnh gửi cho Claude (`sample`) luôn qua `shrinkFile` (tối đa 1600 px, JPEG 0.8): ảnh chụp thẳng từ camera rất lớn làm lời gọi bị từ chối với lỗi "invalid_request" (không dịch được). Ảnh lưu vào `assets` vẫn tối đa 2000 px (`packImage`).

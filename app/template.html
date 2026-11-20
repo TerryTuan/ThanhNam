@@ -1259,6 +1259,17 @@ function showDup(d, pending) {
 }
 
 // Ảnh chụp trang được giữ lại cùng trang (để không mất hình và bảng): thu nhỏ còn tối đa 2000 px rồi lưu bằng capability assets (chỉ chủ sổ tay).
+// Ảnh gửi cho Claude: ảnh chụp thẳng từ camera có thể rất lớn (nhiều MB) làm lời gọi bị từ chối (invalid_request), nên thu nhỏ còn 1600 px, JPEG 0.8.
+async function shrinkFile(file, max = 1600, q = 0.8) {
+  try {
+    const bmp = await createImageBitmap(file), k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    if (k === 1 && file.size < 1.5e6 && /jpe?g|png/.test(file.type)) return file;
+    const cv = document.createElement("canvas"); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+    const cx = cv.getContext("2d"); cx.fillStyle = "#fff"; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(bmp, 0, 0, cv.width, cv.height);
+    const blob = await new Promise(res => cv.toBlob(res, "image/jpeg", q));
+    return blob ? new File([blob], "trang.jpg", { type: "image/jpeg" }) : file;
+  } catch (e) { return file; }
+}
 async function packImage(file) {
   const bmp = await createImageBitmap(file), k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
   const cv = document.createElement("canvas"); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
@@ -1336,7 +1347,7 @@ async function saveCover(file) {
     const img = await uploadPageImage(file); if (!img) throw 0;
     let box = null;
     try {
-      const r = await sample("Ảnh chụp một cuốn sách. Ghi MỘT dòng: x0 y0 x1 y1 là góc trên trái và góc dưới phải của BÌA SÁCH (chỉ phần bìa, không lấy bàn, tay hay nền) trong ảnh, thang 0–1000 (0 0 là góc trên trái ảnh). Chỉ trả về dòng số.", { images: [file] });
+      const r = await sample("Ảnh chụp một cuốn sách. Ghi MỘT dòng: x0 y0 x1 y1 là góc trên trái và góc dưới phải của BÌA SÁCH (chỉ phần bìa, không lấy bàn, tay hay nền) trong ảnh, thang 0–1000 (0 0 là góc trên trái ảnh). Chỉ trả về dòng số.", { images: [await shrinkFile(file)] });
       const bx = parseBoxes(r.text)[0]; if (bx) box = { x: bx.x, y: bx.y, w: bx.w, h: bx.h };
     } catch (e) {}
     await db.collection("books").doc(b.id).set({ cover: { ...img, ...(box ? { box } : {}) }, at: Date.now() });
@@ -1386,7 +1397,7 @@ async function translate(force) {
   state.busy = true; state.err = false; state.result = null; state.msg = "Claude đang đọc và dịch trang…"; state.ctl = new AbortController(); render();
   try {
     const reply = await sample(buildPrompt(b, b.lang, next, prev ? (prev.translation || []).join("\n").slice(-1500) : "", hasImage),
-      { signal: state.ctl.signal, ...(hasImage ? { images: [state.file] } : {}),
+      { signal: state.ctl.signal, ...(hasImage ? { images: [await shrinkFile(state.file)] } : {}),
         onText: ({ text }) => { const el = document.getElementById("status"); if (el) el.textContent = `Claude đang viết… (${text.length} ký tự)`; } });
     const out = parseTagged(reply.text);
     if (!out.translation.length || !out.source.length) throw { code: reply.truncated ? "truncated" : "invalid_json" };

@@ -136,3 +136,7 @@ Trang cũ có ảnh gốc, có dòng `[Hình: ...]` nhưng chưa có `figBox` đ
 ## Chụp sách giấy trong phần mềm (không lưu vào Thư viện ảnh)
 Tab + Thêm có nút "📷 Chụp trang sách" (`openCamera`, cần `sample` có `images`): mở khung xem trực tiếp bằng camera sau (`getUserMedia`, lớp phủ `#cam`), bấm "Chụp" lấy một khung hình thành `File` trong bộ nhớ trang (`state.file`) rồi dịch ngay nếu bật "Tự dịch ngay khi dán"; ảnh không đi qua Thư viện ảnh của điện thoại.
 Nếu khung nhúng của claude.ai không cho dùng camera thì dùng ô chọn ảnh có `capture="environment"` và nhắc người dùng. Ảnh trang vẫn được lưu trong kho `assets` của sổ tay (không phải Thư viện ảnh) để xem lại hình/bảng; muốn bỏ ảnh thì nút "Bỏ ảnh" trước khi dịch.
+
+## Bìa sách
+Mỗi cuốn có thể có ảnh bìa: collection `books`, id = id sách, `{cover: {id, w, h, box?}, at}` (`id` là ảnh trong kho `assets`, `box` là khung bìa `{x, y, w, h}` tỉ lệ 0–1 do Claude tìm trong ảnh chụp; không có box thì dùng cả ảnh). Ở tab + Thêm, mục "Tuỳ chọn" có "📘 Chụp bìa sách" (dùng camera trong phần mềm, `openCamera(saveCover)`, không lưu vào Thư viện ảnh) và "Chọn ảnh bìa".
+`coverHTML` cắt bìa bằng CSS; hiện thẻ sách (bìa + tên + tác giả, `bookCard`) ở đầu tab Bản dịch và làm trang đầu của chế độ Kindle (`readerHTML`, `.rd-cover`). Chưa có trong bản offline/PWA/EPUB (ảnh chỉ tải được từ claude.ai); thêm bìa làm các mốc `rdpos2.i` của Kindle lệch một khối một lần.

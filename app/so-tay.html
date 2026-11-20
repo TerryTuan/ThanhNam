@@ -143,6 +143,14 @@ nav.tabs a[hidden] { display: none; }
 #cam .camrow button { font-size: 1rem; padding: 12px 22px; border-radius: 28px; }
 #cam .camrow .shoot { background: #fff; color: #000; font-weight: 700; padding: 14px 30px; }
 #cam .camnote { color: #ddd; font-size: .8rem; text-align: center; padding: 8px 16px 0; background: #111; }
+.cover { position: relative; overflow: hidden; border-radius: 6px; box-shadow: 0 2px 10px rgba(0,0,0,.25); background: #fff; flex: none; }
+.cover img { position: absolute; max-width: none; height: auto; }
+.bookcard { display: flex; gap: 14px; align-items: center; margin: 0 0 14px; }
+.bookcard .cover { width: 84px; }
+.bookcard .bt { font-family: var(--font-read); font-size: 1.1rem; font-weight: 600; } .bookcard .ba { color: var(--muted); font-size: .88rem; }
+.rd-content .rd-cover { text-align: center; text-indent: 0; break-inside: avoid; margin: 0 0 1.2em; }
+.rd-content .rd-cover .cover { margin: 0 auto 10px; width: min(78%, 46vh); }
+.rd-content .rd-cover .bt { font-family: var(--font-read); font-size: 1.25em; font-weight: 600; }
 p.figcap { font-style: italic; color: var(--muted); border-left: 2px solid var(--line); padding-left: 10px; text-indent: 0; }
 details.fig { margin: 4px 0 12px; }
 details.fig summary { cursor: pointer; color: var(--accent); font-size: .88rem; }
@@ -359,7 +367,7 @@ let REPO_BOOKS = [{"id": "the-foundation-of-winning-golf", "title": "The foundat
 // PWA = bản cài lên màn hình chính, chạy hoàn toàn offline: mã ứng dụng không chứa sách; người dùng nhập tệp dữ liệu một lần, sách và tiến độ lưu trong IndexedDB của thiết bị.
 const PWA = /*__PWA__*/false;
 const OFFLINE = /*__OFFLINE__*/false || PWA, BUILT = "/*__BUILT__*/", SEED = /*__SEED__*/null;
-let assets = null, dbPages = [], dbWords = [], db = null, sample = null, isOwner = false, canImage = false;
+let dbBooks = {}, assets = null, dbPages = [], dbWords = [], db = null, sample = null, isOwner = false, canImage = false;
 // localStorage có thể bị chặn hoặc bị xoá trong khung nhúng của claude.ai, nên giữ thêm bản sao trong bộ nhớ và đồng bộ các khoá "nhớ chỗ đang đọc" lên db riêng của người dùng.
 const memStore = {}, SYNCED = new Set(["rdpos2", "pos", "tab", "view", "rdLang", "rdSize", "rs"]);
 const store = {
@@ -677,6 +685,14 @@ function figCrop(p, i) {
   const R = ((bx.w * (p.img.w || 1)) / (bx.h * (p.img.h || 1))).toFixed(4);
   return `<div class="figcrop" role="img" aria-label="Hình trong sách" style="aspect-ratio:${R};width:min(100%,calc(50vh*${R}))"><img src="/_blob/${esc(p.img.id)}" alt="" loading="lazy" style="width:${(100 / bx.w).toFixed(3)}%;left:${(-bx.x / bx.w * 100).toFixed(3)}%;top:${(-bx.y / bx.h * 100).toFixed(3)}%"></div>`;
 }
+// Bìa sách: ảnh chụp bìa (books/<id>.cover = {id, w, h, box}) cắt theo khung bìa Claude tìm được, giống figCrop.
+function coverHTML(b) {
+  const c = !OFFLINE && b && dbBooks[b.id] && dbBooks[b.id].cover; if (!c || !c.id) return "";
+  const bx = c.box && c.box.w > 0.05 && c.box.h > 0.05 ? c.box : { x: 0, y: 0, w: 1, h: 1 };
+  const R = ((bx.w * (c.w || 1)) / (bx.h * (c.h || 1))).toFixed(4);
+  return `<div class="cover" role="img" aria-label="Bìa sách" style="aspect-ratio:${R}"><img src="/_blob/${esc(c.id)}" alt="" style="width:${(100 / bx.w).toFixed(3)}%;left:${(-bx.x / bx.w * 100).toFixed(3)}%;top:${(-bx.y / bx.h * 100).toFixed(3)}%"></div>`;
+}
+const bookCard = b => { const cv = coverHTML(b); return cv ? `<div class="bookcard">${cv}<div><div class="bt">${esc(b.title)}</div>${b.author ? `<div class="ba">${esc(b.author)}</div>` : ""}</div></div>` : ""; };
 const hasFigCap = p => (p.translation || []).some(isFigCap) || (p.source || []).some(isFigCap);
 function paraHTML(t, { lang = "", cls = "", mark = null, pre = "", figs = null } = {}) {
   if (isTable(t)) return pre + tableHTML(t);
@@ -733,7 +749,7 @@ function renderReading() {
   if (!b || !b.pages.length) return PWA ? `<p class="empty">Chưa có sách trong ứng dụng.<br>Bấm <b>“Nhập dữ liệu”</b> ở trên và chọn tệp <b>sach-du-lieu.json</b> (chỉ cần làm một lần).</p>` : `<p class="empty">Chưa có trang nào. Dán một trang sách cho Claude để bắt đầu.</p>`;
   const vocab = items("tu-vung"), vw = state.view, left = vocab.filter(v => !known.has(v.key)).length;
   const jump = b.pages.length > 3 ? `<select id="jump" aria-label="Đi tới trang"><option value="">Đi tới trang…</option>${b.pages.map(p => `<option value="${p.n}">Trang ${pad(p.n)}</option>`).join("")}</select>` : "";
-  return ttsSettings() + `<div class="toolbar"><button class="primary" id="openReader">Đọc kiểu Kindle</button>${b.pages.length > 1 ? `<button data-viewpage="${b.pages[b.pages.length - 1].n}">Trang mới nhất</button>` : ""}${jump}<span class="seg" role="group" aria-label="Hiển thị">
+  return bookCard(b) + ttsSettings() + `<div class="toolbar"><button class="primary" id="openReader">Đọc kiểu Kindle</button>${b.pages.length > 1 ? `<button data-viewpage="${b.pages[b.pages.length - 1].n}">Trang mới nhất</button>` : ""}${jump}<span class="seg" role="group" aria-label="Hiển thị">
       <button data-view="both" aria-pressed="${vw === "both"}">Song ngữ</button><button data-view="src" aria-pressed="${vw === "src"}">Bản gốc</button><button data-view="vi" aria-pressed="${vw === "vi"}">Bản dịch</button><button data-view="flow" aria-pressed="${vw === "flow"}">Liền mạch</button></span>
       <span class="stat">${b.pages.length} trang · ${left} từ mới chưa nhớ</span></div>${vw !== "vi" ? `<div class="row" style="margin:-4px 0 12px;align-items:center"><span class="help" style="font-size:.82rem;color:var(--muted)">Chạm vào từ tô màu để xem nghĩa.</span>${tapToggleBtn()}</div>` : ""}` +
     (vw === "flow" ? `<p class="help" style="font-size:.82rem;color:var(--muted);margin:-6px 0 12px">Chỉ tiếng Việt, đọc liền như một cuốn sách. Từ mới chưa nhớ vẫn tô màu, chạm vào để xem từ gốc.</p>` + renderFlow(b) : b.pages.map(p => `<article class="page" id="p-${p.n}"><div class="page-head"><span class="label">Trang ${pad(p.n)}${p.label ? ` · trang sách ${esc(p.label)}` : ""}</span><span class="pg">${esc(p.date || "")}</span></div>
@@ -1163,7 +1179,7 @@ function renderAdd() {
     ${state.file ? `<div class="row"><img class="thumb" id="thumb" alt="Ảnh trang sách"><button id="dropImg">Bỏ ảnh</button></div>` : ""}
     <div class="row"><button class="primary" id="pasteBtn">Dán và dịch</button>${canImage ? `<button id="camBtn">📷 Chụp trang sách</button>` : ""}<button id="go"${state.busy ? " disabled" : ""}>${state.busy ? "Đang dịch…" : "Dịch"}</button>${state.busy ? `<button id="stop">Dừng</button>` : ""}${state.draft || state.file ? `<button id="clearDraft">Xoá ô</button>` : ""}</div>
     <label class="help"><input type="checkbox" id="autoGo"${state.autoGo ? " checked" : ""}> Tự dịch ngay khi dán · mất khoảng 30–90 giây</label>
-    <details class="opts"><summary>Tuỳ chọn: ảnh chụp, số trang sách</summary><div class="row" style="margin-top:8px">${canImage ? `<label class="help" for="img">Chọn ảnh chụp trang:</label><input type="file" id="img" accept="image/*">` : ""}
+    <details class="opts"><summary>Tuỳ chọn: ảnh chụp, bìa sách, số trang sách</summary>${state.book !== "__new" && b ? `<div class="row" style="margin-top:8px"><button id="coverCam">📘 Chụp bìa sách</button>${canImage ? `<label class="attach"><span>Chọn ảnh bìa</span><input type="file" accept="image/*" id="coverFile" hidden></label>` : ""}<span class="help">Bìa hiện đầu sách và đầu bản đọc Kindle.</span></div>` : ""}<div class="row" style="margin-top:8px">${canImage ? `<label class="help" for="img">Chọn ảnh chụp trang:</label><input type="file" id="img" accept="image/*">` : ""}
       <input type="text" id="pageLabel" placeholder="Số trang trong sách (không bắt buộc)" value="${esc(state.pageLabel)}"></div></details>
     ${state.dup ? (state.dup.other
       ? `<div class="status warn" role="alert"><b>Có thể bạn đang dán nhầm cuốn.</b> Nội dung giống ${state.dup.pct}% với <b>Trang ${pad(state.dup.n)}</b> của cuốn “${esc(state.dup.other.title)}”, còn bạn đang chọn cuốn “${esc(b ? b.title : "")}”. Chưa lưu gì cả.
@@ -1376,11 +1392,12 @@ async function locateFigs(p, quiet) {
 // Chụp sách giấy ngay trong phần mềm: xem trực tiếp bằng camera, bấm Chụp lấy một khung hình đưa thẳng cho Claude dịch.
 // Ảnh chỉ nằm trong bộ nhớ của trang, KHÔNG được ghi vào Thư viện ảnh của điện thoại. Nếu khung nhúng không cho dùng camera
 // thì dùng ô chọn ảnh có capture (iPhone thường cũng không lưu ảnh đó vào Thư viện) và nhắc người dùng.
-async function openCamera() {
+async function openCamera(onFile) {
   if (state.busy) return;
+  const deliver = f => { if (onFile) return onFile(f); state.file = f; state.draft = ""; state.msg = ""; state.pasteHint = false; state.autoGo ? translate() : render(); };
   const useFile = note => {
     const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; inp.setAttribute("capture", "environment");
-    inp.onchange = () => { if (inp.files[0]) { state.file = inp.files[0]; state.draft = ""; state.msg = ""; state.autoGo ? translate() : render(); } };
+    inp.onchange = () => { if (inp.files[0]) deliver(inp.files[0]); };
     if (note) toast(note); inp.click();
   };
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return useFile("Dùng camera của điện thoại để chụp trang sách.");
@@ -1398,10 +1415,23 @@ async function openCamera() {
     const cv = document.createElement("canvas"); cv.width = v.videoWidth; cv.height = v.videoHeight; cv.getContext("2d").drawImage(v, 0, 0);
     cv.toBlob(blob => {
       close(); if (!blob) return;
-      state.file = new File([blob], "trang.jpg", { type: "image/jpeg" }); state.draft = ""; state.msg = ""; state.pasteHint = false;
-      state.autoGo ? translate() : render();
+      deliver(new File([blob], "trang.jpg", { type: "image/jpeg" }));
     }, "image/jpeg", 0.9);
   };
+}
+async function saveCover(file) {
+  const b = book(); if (!b || !file || !assets || !db) return toast("Chưa lưu được bìa (cần mở trên claude.ai).");
+  toast("Đang lưu bìa sách…");
+  try {
+    const img = await uploadPageImage(file); if (!img) throw 0;
+    let box = null;
+    try {
+      const r = await sample("Ảnh chụp một cuốn sách. Ghi MỘT dòng: x0 y0 x1 y1 là góc trên trái và góc dưới phải của BÌA SÁCH (chỉ phần bìa, không lấy bàn, tay hay nền) trong ảnh, thang 0–1000 (0 0 là góc trên trái ảnh). Chỉ trả về dòng số.", { images: [file] });
+      const bx = parseBoxes(r.text)[0]; if (bx) box = { x: bx.x, y: bx.y, w: bx.w, h: bx.h };
+    } catch (e) {}
+    await db.collection("books").doc(b.id).set({ cover: { ...img, ...(box ? { box } : {}) }, at: Date.now() });
+    toast("Đã lưu bìa sách.");
+  } catch (e) { toast("Chưa lưu được bìa, thử lại."); }
 }
 async function attachImage(dbId, file) {
   toast("Đang tải ảnh lên…");
@@ -1490,6 +1520,10 @@ async function pasteFromClipboard() {
 const rdKey = () => "rdpos:" + (book() ? book().id : "") + ":" + state.rdLang;
 function readerHTML() {
   const b = book(); if (!b) return "";
+  const cv = coverHTML(b), cover = cv ? `<div class="rd-cover">${cv}<div class="bt">${esc(b.title)}</div>${b.author ? `<div class="ba" style="color:var(--muted)">${esc(b.author)}</div>` : ""}</div>` : "";
+  return cover + readerBody(b);
+}
+function readerBody(b) {
   const vocab = items("tu-vung"), lang = state.rdLang;
   if (lang === "vi") { // đọc tiếng Việt liền mạch, không có đề mục trang
     const byN = Object.fromEntries(b.pages.map(p => [p.n, p]));
@@ -1634,6 +1668,7 @@ function renderCore() {
   const na = document.getElementById("newAuthor"); if (na) na.oninput = () => { state.newAuthor = na.value; renderHeader(); };
   const pl = document.getElementById("pageLabel"); if (pl) pl.oninput = () => { state.pageLabel = pl.value; };
   const bp = document.getElementById("bookPick"); if (bp) bp.onchange = () => { state.book = bp.value; state.game = null; state.result = null; state.dup = null; state.msg = ""; if (bp.value !== "__new") setBook(bp.value); render(); };
+  const cf = document.getElementById("coverFile"); if (cf) cf.onchange = () => { if (cf.files[0]) saveCover(cf.files[0]); };
   const img = document.getElementById("img"); if (img) img.onchange = () => { if (img.files[0]) { state.file = img.files[0]; render(); } };
   const th = document.getElementById("thumb"); if (th && state.file) th.src = URL.createObjectURL(state.file);
   const q = document.getElementById("q");
@@ -1677,6 +1712,7 @@ document.addEventListener("click", e => {
   if (b.id === "toEnd") { const bk = book(), last = bk && bk.pages[bk.pages.length - 1], el = last && document.getElementById("p-" + last.n); return el ? el.scrollIntoView({ block: "start" }) : undefined; }
   if (b.id === "pasteBtn") return pasteFromClipboard();
   if (b.id === "camBtn") return openCamera();
+  if (b.id === "coverCam") return openCamera(saveCover);
   if (b.id === "clearDraft") { state.draft = ""; store.set("draft", ""); state.file = null; state.result = null; state.msg = ""; state.focusAdd = true; }
   if (b.id === "stop") return state.ctl && state.ctl.abort();
   if (b.dataset.view) { state.view = b.dataset.view; store.set("view", state.view); }
@@ -1762,6 +1798,7 @@ document.addEventListener("paste", e => {
   try { uid = u && u.id ? await u.id() : null; } catch (e) { uid = null; }
   pullKnown(); pullPrefs();
   if (s) canImage = !!(await s.limits().catch(() => null))?.images;
+  if (db) db.collection("books").onSnapshot(snap => { dbBooks = Object.fromEntries(snap.docs.map(x => [x.id, x.data()])); render(); }, () => {});
   if (db) db.collection("words").onSnapshot(snap => { dbWords = snap.docs.map(x => ({ ...x.data(), dbId: x.id })); render(); }, () => {});
   if (db) db.collection("pages").onSnapshot(snap => { dbPages = snap.docs.map(x => ({ ...x.data(), dbId: x.id })); render(); setTimeout(autoLocate, 1500); }, () => {});
   render();

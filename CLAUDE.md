@@ -146,3 +146,7 @@ Mỗi cuốn có thể có ảnh bìa: collection `books`, id = id sách, `{cove
 Dịch ảnh bị `invalid_request` / `image_rejected` thì tự thử lại một lần với ảnh nhỏ hơn (1100 px, JPEG 0.7); thông báo lỗi hiện thêm `message` và kích cỡ/định dạng ảnh để chẩn đoán (nhờ người dùng chụp màn hình dòng này).
 
 Kiểm tra đủ chữ khi dịch ảnh (`completeFromImage`): sau lần dịch đầu, hỏi Claude lần hai xem phần cuối trang (đoạn cuối, tiêu đề, trích dẫn) có còn thiếu không; thiếu thì nối thêm vào `source`/`translation` (và bỏ dấu "..." dừng dở). Lần kiểm tra lỗi thì giữ bản dịch đã có. Lời nhắc dịch cũng yêu cầu chép TOÀN BỘ chữ đến cuối trang. Trang cũ bị thiếu thì sửa trực tiếp trong db (`ArtifactData update`).
+
+## Gộp từ phiên khác (2026-11-20, chỉ có trên artifact, nay đã đưa vào `app/template.html`)
+Một phiên khác đã đăng lên artifact các tính năng chưa có trong repo; chúng được gộp vào template ngày 2026-11-23: chụp/chọn nhiều ảnh một lượt (`runQueue`, nút "🖼 Chọn nhiều ảnh", chế độ chụp liên tục `openCamera(null, true)`, "Thử lại N ảnh lỗi"), đọc số trang in trong sách (`PAGENO`, `pnRange`, `seqProblem`: cảnh báo ảnh không nối tiếp trang trước), dịch dự phòng 2 bước khi ảnh bị từ chối (`twoStep`: chép chữ rồi dịch), lật nhanh từng trang giữa tiếng Anh và tiếng Việt (`flipPage`, `keepSpot`, nút "⇄"), và chọn Song ngữ / Tiếng Anh / Tiếng Việt cho trang vừa dịch ở tab Thêm (`addView`).
+Khi xuất bản, luôn đọc bản đang chạy trên artifact trước nếu bị từ chối vì "newer version", rồi gộp (3 chiều: bản build lần trước, bản mới của mình, bản đang chạy) thay vì ghi đè.

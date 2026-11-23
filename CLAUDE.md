@@ -144,3 +144,5 @@ Mỗi cuốn có thể có ảnh bìa: collection `books`, id = id sách, `{cove
 Ảnh gửi cho Claude (`sample`) luôn qua `shrinkFile` (tối đa 1600 px, JPEG 0.8): ảnh chụp thẳng từ camera rất lớn làm lời gọi bị từ chối với lỗi "invalid_request" (không dịch được). Ảnh lưu vào `assets` vẫn tối đa 2000 px (`packImage`).
 
 Dịch ảnh bị `invalid_request` / `image_rejected` thì tự thử lại một lần với ảnh nhỏ hơn (1100 px, JPEG 0.7); thông báo lỗi hiện thêm `message` và kích cỡ/định dạng ảnh để chẩn đoán (nhờ người dùng chụp màn hình dòng này).
+
+Kiểm tra đủ chữ khi dịch ảnh (`completeFromImage`): sau lần dịch đầu, hỏi Claude lần hai xem phần cuối trang (đoạn cuối, tiêu đề, trích dẫn) có còn thiếu không; thiếu thì nối thêm vào `source`/`translation` (và bỏ dấu "..." dừng dở). Lần kiểm tra lỗi thì giữ bản dịch đã có. Lời nhắc dịch cũng yêu cầu chép TOÀN BỘ chữ đến cuối trang. Trang cũ bị thiếu thì sửa trực tiếp trong db (`ArtifactData update`).

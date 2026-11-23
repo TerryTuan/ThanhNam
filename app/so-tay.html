@@ -1209,7 +1209,7 @@ function buildPrompt(b, lang, next, prevText, hasImage) {
   return `Bạn là dịch giả cho người Việt đang học ngoại ngữ.
 Họ đang đọc cuốn "${b.title}"${b.original ? ` (${b.original})` : ""}. Đây là trang thứ ${next} họ dịch.
 ${prevText ? `Đoạn dịch tiếng Việt của trang trước (để giữ mạch văn và cách xưng hô):\n"""${prevText}"""\n` : ""}
-${hasImage ? "Trang sách nằm trong ảnh đính kèm: chép lại nguyên văn chữ trong ảnh, bỏ số chú thích nhỏ, số trang và dòng trạng thái của máy đọc sách (ví dụ \"5 mins left in chapter\", \"48%\")." : ""}
+${hasImage ? "Trang sách nằm trong ảnh đính kèm: chép lại nguyên văn TOÀN BỘ chữ trong ảnh từ trên xuống dưới, kể cả tiêu đề, trích dẫn, tên tác giả câu trích và đoạn cuối trang (không được dừng giữa chừng; chỉ dùng \"...\" khi chính trang sách bị cắt giữa câu), bỏ số chú thích nhỏ, số trang và dòng trạng thái của máy đọc sách (ví dụ \"5 mins left in chapter\", \"48%\")." : ""}
 ${state.draft.trim() ? `Nội dung trang:\n"""${state.draft.trim()}"""` : ""}
 
 Quy tắc cho BẢNG và HÌNH (rất quan trọng, không được bỏ):
@@ -1467,6 +1467,27 @@ async function savePage(b, next, out) {
   return analyze(page);
 }
 
+// Kiểm tra lần hai: Claude đôi khi dừng sớm (bỏ tiêu đề, trích dẫn hay đoạn cuối trang). Hỏi lại xem còn chữ nào chưa chép rồi nối thêm vào.
+async function completeFromImage(out, b, imgFile, signal) {
+  try {
+    state.msg = "Đang kiểm tra phần cuối trang có thiếu chữ không…"; const el = document.getElementById("status"); if (el) el.textContent = state.msg;
+    const have = (out.source || []).join("\n\n"), tail = have.slice(-700);
+    const r = await sample(`Ảnh là một trang sách${b ? ` (cuốn "${b.title}")` : ""}. Chữ đã được chép từ ảnh, phần cuối đang là:\n"""${tail}"""\n\nHãy xem lại ảnh: có chữ nào của trang nằm SAU chỗ này (đoạn cuối, tiêu đề mục, trích dẫn, tên người được trích, chú thích) mà chưa được chép không? Dấu "..." ở cuối đoạn có thể là do chép dừng sớm, hãy kiểm tra xem câu đó trong ảnh còn tiếp không.\n- Nếu đã đủ: chỉ trả lời đúng một từ: ĐỦ\n- Nếu thiếu: chép nốt phần còn lại, bắt đầu từ chỗ câu cuối của đoạn đã chép còn dang dở (nếu có), theo khuôn:\n===SOURCE===\nđoạn gốc (cách nhau một dòng trống)\n===TRANSLATION===\nbản dịch tiếng Việt tương ứng (mỗi đoạn gốc một đoạn dịch, cùng quy tắc bảng và [Hình: ...] như trước)\nKhông lặp lại phần đã chép.`, { images: [imgFile], signal });
+    if (!/===SOURCE===/.test(r.text)) return;
+    const more = parseTagged(r.text);
+    if (!more.source.length || more.source.length !== more.translation.length) return;
+    const ell = /\s*(\.\.\.|…)\s*$/;
+    if (ell.test(out.source[out.source.length - 1])) {
+      // đoạn cuối bị dừng giữa câu: bản chép lại của đoạn đó (nếu có) thay thế đoạn dang dở
+      const first = more.source[0].replace(/^\s*(\.\.\.|…)\s*/, ""), head = out.source[out.source.length - 1].replace(ell, "").slice(0, 40).toLowerCase();
+      if (first.toLowerCase().startsWith(head.slice(0, 25))) { out.source.pop(); out.translation.pop(); }
+      else { out.source[out.source.length - 1] = out.source[out.source.length - 1].replace(ell, ""); out.translation[out.translation.length - 1] = out.translation[out.translation.length - 1].replace(ell, ""); }
+    }
+    out.source.push(...more.source); out.translation.push(...more.translation);
+    if (more.figBox && more.figBox.some(Boolean) && !(out.figBox || []).some(Boolean)) out.figBox = more.figBox;
+    if (more.fig) out.fig = true;
+  } catch (e) { /* kiểm tra thêm không thành thì giữ bản dịch hiện có */ }
+}
 // force = true khi người dùng bấm "Vẫn lưu thành trang mới" sau cảnh báo trùng.
 async function translate(force) {
   if (!sample || !db || !isOwner || state.busy) return render();
@@ -1501,6 +1522,7 @@ async function translate(force) {
     const out = parseTagged(reply.text);
     if (!out.translation.length || !out.source.length) throw { code: reply.truncated ? "truncated" : "invalid_json" };
     if (reply.truncated) throw { code: "truncated" };
+    if (hasImage) await completeFromImage(out, b, await shrinkFile(state.file), state.ctl.signal);
     // Ảnh: chỉ biết chữ sau khi Claude đọc, nên kiểm tra trùng ở đây và giữ kết quả để khỏi dịch lại nếu người dùng vẫn muốn lưu.
     if (!force) { const d = findDuplicate((out.source || []).join(" "), b.pages) || findInOtherBooks((out.source || []).join(" "), b.id); if (d) return showDup(d, { b, next, out }); }
     return await savePage(b, next, out);
